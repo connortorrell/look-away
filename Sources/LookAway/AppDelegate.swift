@@ -1,25 +1,13 @@
-import SwiftUI
-
-@main
-struct LookAwayApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-
-    var body: some Scene {
-        MenuBarExtra {
-            MenuContent(model: appDelegate.model)
-        } label: {
-            Image(systemName: appDelegate.model.iconName)
-        }
-        .menuBarExtraStyle(.menu)
-    }
-}
+import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let model = AppModel()
+    private let model = AppModel()
+    private var statusMenu: StatusMenuController?
     private var systemEvents: SystemEvents?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        statusMenu = StatusMenuController(model: model)
         systemEvents = SystemEvents(
             onSuspend: { [model] in model.systemDidSuspend() },
             onResume: { [model] in model.systemDidResume() }

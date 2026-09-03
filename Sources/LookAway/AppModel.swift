@@ -9,10 +9,7 @@ import Observation
 final class AppModel {
     enum BreakPhase { case counting, done }
 
-    private(set) var statusText = "Starting…"
     private(set) var iconName = "eye"
-    private(set) var isPaused = false
-    private(set) var isBreaking = false
     private(set) var remainingSeconds = 0
     private(set) var breakPhase: BreakPhase = .counting
     private(set) var launchAtLoginEnabled = false
@@ -23,7 +20,6 @@ final class AppModel {
     private let clock: Timekeeper
     private var panel: BreakPanelController?
     private var doneHide: ScheduledTask?
-    private var statusTimer: Timer?
 
     init(config: Config = .standard) {
         self.config = config
@@ -35,9 +31,6 @@ final class AppModel {
 
     func start() {
         scheduler.start()
-        statusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshStatus() }
-        }
     }
 
     // MARK: User actions
@@ -84,7 +77,7 @@ final class AppModel {
         case .scheduleChanged:
             break
         }
-        refreshStatus()
+        refreshIcon()
     }
 
     private func showPanel() {
@@ -101,33 +94,40 @@ final class AppModel {
 
     // MARK: Display state
 
-    private func refreshStatus() {
-        let state = scheduler.state
-        let text: String
-        let icon: String
-        switch state {
+    var isPaused: Bool {
+        if case .paused = scheduler.state { return true }
+        return false
+    }
+
+    var isBreaking: Bool {
+        if case .breaking = scheduler.state { return true }
+        return false
+    }
+
+    /// Computed on demand so a menu can poll it every second while open.
+    var statusText: String {
+        switch scheduler.state {
         case .stopped:
-            text = "Starting…"
-            icon = "eye"
+            return "Starting…"
         case .idle(let fireAt):
-            text = "Next break in \(Self.format(fireAt.timeIntervalSince(clock.now())))"
-            icon = "eye"
+            return "Next break in \(Self.format(fireAt.timeIntervalSince(clock.now())))"
         case .breaking:
-            text = "Break in progress"
-            icon = "eye.slash"
+            return "Break in progress"
         case .snoozed(let until):
-            text = "Delayed — back in \(Self.format(until.timeIntervalSince(clock.now())))"
-            icon = "eye"
+            return "Delayed — back in \(Self.format(until.timeIntervalSince(clock.now())))"
         case .paused(let byUser):
-            text = byUser ? "Paused" : "Paused (screen locked)"
-            icon = "pause.circle"
+            return byUser ? "Paused" : "Paused (screen locked)"
         }
-        if text != statusText { statusText = text }
+    }
+
+    private func refreshIcon() {
+        let icon: String
+        switch scheduler.state {
+        case .breaking: icon = "eye.slash"
+        case .paused: icon = "pause.circle"
+        case .stopped, .idle, .snoozed: icon = "eye"
+        }
         if icon != iconName { iconName = icon }
-        let paused = if case .paused = state { true } else { false }
-        if paused != isPaused { isPaused = paused }
-        let breaking = if case .breaking = state { true } else { false }
-        if breaking != isBreaking { isBreaking = breaking }
     }
 
     private static func format(_ interval: TimeInterval) -> String {
