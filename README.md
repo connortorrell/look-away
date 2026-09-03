@@ -29,19 +29,50 @@ time, look at something 20 feet away for 20 seconds.
 
 Durations live in `Sources/LookAwayCore/Config.swift`.
 
-## Build and install
+## Install
 
-Requires Xcode 16 or newer (macOS 14+ target).
+There is no prebuilt download. You build the app yourself, which takes about a
+minute and needs two things:
+
+- macOS 14 Sonoma or newer.
+- Xcode 16 or newer, installed from the Mac App Store and opened once so it
+  can finish setting up its command line tools.
+
+Then, in Terminal:
 
 ```bash
+git clone https://github.com/connortorrell/look-away.git
+cd look-away
 make install
 ```
 
-That builds a release binary, wraps it in `Look Away.app`, ad-hoc signs it,
-copies it to `/Applications`, and launches it. On its first launch from
-`/Applications` it registers itself as a login item; toggle that from the menu.
+`make install` does everything: it compiles the app, wraps it into
+`Look Away.app`, signs it for local use, copies it to your `Applications`
+folder, and launches it. Because it's built on your own Mac, there is no
+Gatekeeper warning.
 
-Other targets:
+When it's running you'll see an eye icon in the menu bar. Click it to see the
+time until the next break, pause reminders, or take a break right away. The
+first popup arrives 20 minutes after launch.
+
+The app adds itself to your login items the first time it runs from
+`Applications`, so it starts automatically after a restart. Turn that off from
+the menu with **Launch at Login** if you'd rather start it by hand.
+
+### Updating
+
+```bash
+cd look-away
+git pull
+make install
+```
+
+### Uninstalling
+
+Quit Look Away from its menu, then drag `Look Away.app` out of `Applications`
+to the Trash. If Launch at Login was on, macOS removes the login item with it.
+
+### Other make targets
 
 | Command        | What it does                                   |
 |----------------|------------------------------------------------|
