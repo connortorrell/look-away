@@ -24,8 +24,7 @@ struct BreakView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                Button("Delay 5 min") { model.snooze(.short) }
-                Button("Delay 10 min") { model.snooze(.long) }
+                Button("Delay 5 min") { model.snooze() }
                 Button("Decline") { model.decline() }
                     .buttonStyle(PanelButtonStyle(role: .quiet))
             }

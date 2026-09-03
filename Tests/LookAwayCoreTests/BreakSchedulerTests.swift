@@ -4,8 +4,8 @@ import Testing
 
 @MainActor
 struct BreakSchedulerTests {
-    // Short durations keep the arithmetic readable: 100s work, 5s break, 10s / 20s snooze.
-    let config = Config(workInterval: 100, breakSeconds: 5, shortSnooze: 10, longSnooze: 20)
+    // Short durations keep the arithmetic readable: 100s work, 5s break, 10s snooze.
+    let config = Config(workInterval: 100, breakSeconds: 5, snoozeInterval: 10)
     let clock = FakeTimekeeper()
     let scheduler: BreakScheduler
     let events: EventLog
@@ -101,12 +101,12 @@ struct BreakSchedulerTests {
 
     // MARK: Snooze
 
-    @Test func shortSnoozeReturnsWithFreshCountdown() {
+    @Test func snoozeReturnsWithFreshCountdown() {
         scheduler.start()
         clock.advance(by: 103) // 3s into the break, 2 remaining
         events.clear()
 
-        scheduler.snooze(.short)
+        scheduler.snooze()
         #expect(events.all == [.breakDismissed, .scheduleChanged])
         #expect(scheduler.state == .snoozed(until: date(113)))
 
@@ -117,19 +117,10 @@ struct BreakSchedulerTests {
         #expect(events.all.last == .breakStarted)
     }
 
-    @Test func longSnoozeUsesLongDuration() {
-        scheduler.start()
-        clock.advance(by: 100)
-        scheduler.snooze(.long)
-        #expect(scheduler.state == .snoozed(until: date(120)))
-        clock.advance(by: 20)
-        #expect(scheduler.state == .breaking(remaining: 5))
-    }
-
     @Test func snoozeDoesNotStartWorkInterval() {
         scheduler.start()
         clock.advance(by: 100)
-        scheduler.snooze(.short)
+        scheduler.snooze()
         clock.advance(by: 10) // popup back at 110
         clock.advance(by: 5)  // completes at 115
         // Work interval anchored to completion at 115, not to the snooze at 100.
@@ -139,19 +130,19 @@ struct BreakSchedulerTests {
     @Test func snoozesCanChain() {
         scheduler.start()
         clock.advance(by: 100)
-        scheduler.snooze(.short)
+        scheduler.snooze()
         clock.advance(by: 10)
         #expect(scheduler.state == .breaking(remaining: 5))
-        scheduler.snooze(.long)
-        #expect(scheduler.state == .snoozed(until: date(130)))
-        clock.advance(by: 20)
+        scheduler.snooze()
+        #expect(scheduler.state == .snoozed(until: date(120)))
+        clock.advance(by: 10)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
     @Test func snoozeIsIgnoredOutsideABreak() {
         scheduler.start()
         events.clear()
-        scheduler.snooze(.short)
+        scheduler.snooze()
         #expect(events.all.isEmpty)
         #expect(clock.pendingCount == 1)
     }
@@ -181,7 +172,7 @@ struct BreakSchedulerTests {
     @Test func pauseWhileSnoozedCancelsReturn() {
         scheduler.start()
         clock.advance(by: 100)
-        scheduler.snooze(.short)
+        scheduler.snooze()
         scheduler.pause()
         clock.advance(by: 1000)
         #expect(scheduler.state == .paused(byUser: true))

@@ -6,22 +6,19 @@ public struct Config: Sendable, Equatable {
     public var workInterval: TimeInterval
     /// Length of the look-away countdown, in whole seconds.
     public var breakSeconds: Int
-    /// Snooze lengths offered on the popup.
-    public var shortSnooze: TimeInterval
-    public var longSnooze: TimeInterval
+    /// How long "Delay" hides the popup before it returns.
+    public var snoozeInterval: TimeInterval
 
-    public init(workInterval: TimeInterval, breakSeconds: Int, shortSnooze: TimeInterval, longSnooze: TimeInterval) {
+    public init(workInterval: TimeInterval, breakSeconds: Int, snoozeInterval: TimeInterval) {
         self.workInterval = workInterval
         self.breakSeconds = breakSeconds
-        self.shortSnooze = shortSnooze
-        self.longSnooze = longSnooze
+        self.snoozeInterval = snoozeInterval
     }
 
-    /// The 20/20/20 rule with 5 and 10 minute snoozes.
+    /// The 20/20/20 rule with a 5 minute snooze.
     public static let standard = Config(
         workInterval: 20 * 60,
         breakSeconds: 20,
-        shortSnooze: 5 * 60,
-        longSnooze: 10 * 60
+        snoozeInterval: 5 * 60
     )
 }

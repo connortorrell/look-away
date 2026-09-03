@@ -6,7 +6,7 @@ time, look at something 20 feet away for 20 seconds.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/popup-dark.png">
-    <img src="docs/popup-light.png" alt="Look Away break popup showing a 20-second countdown with Delay 5 min, Delay 10 min, and Decline buttons" width="560">
+    <img src="docs/popup-light.png" alt="Look Away break popup showing a 20-second countdown with Delay 5 min and Decline buttons" width="560">
   </picture>
 </p>
 
@@ -17,8 +17,8 @@ time, look at something 20 feet away for 20 seconds.
   above every other window, without taking keyboard focus from your current app.
 - The panel starts a 20-second countdown the moment it appears. At zero it
   shows "Done", plays a soft chime, and closes itself.
-- **Delay 5 min / Delay 10 min** hide the panel and bring it back later with a
-  fresh 20-second countdown. Snoozes can be chained.
+- **Delay 5 min** hides the panel and brings it back later with a fresh
+  20-second countdown. Delays can be chained.
 - **Decline** closes the panel immediately.
 - The next 20-minute interval starts when the panel closes (finished or
   declined), never from a snooze.

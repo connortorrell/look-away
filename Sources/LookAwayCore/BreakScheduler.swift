@@ -4,11 +4,6 @@ import Foundation
 /// and reads `state` for display.
 @MainActor
 public final class BreakScheduler {
-    public enum SnoozeLength: Sendable, Equatable {
-        case short
-        case long
-    }
-
     public enum State: Equatable, Sendable {
         /// `start()` has not been called.
         case stopped
@@ -67,12 +62,12 @@ public final class BreakScheduler {
         armWork()
     }
 
-    /// Hide the popup and bring it back after the snooze length.
-    public func snooze(_ length: SnoozeLength) {
+    /// Hide the popup and bring it back after the snooze interval.
+    public func snooze() {
         guard case .breaking = state else { return }
         cancelPending()
         emit(.breakDismissed)
-        let duration = length == .short ? config.shortSnooze : config.longSnooze
+        let duration = config.snoozeInterval
         state = .snoozed(until: clock.now().addingTimeInterval(duration))
         pending = clock.schedule(after: duration) { [weak self] in self?.beginBreak() }
         emit(.scheduleChanged)

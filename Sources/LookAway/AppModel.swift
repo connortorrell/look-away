@@ -35,7 +35,7 @@ final class AppModel {
 
     // MARK: User actions
 
-    func snooze(_ length: BreakScheduler.SnoozeLength) { scheduler.snooze(length) }
+    func snooze() { scheduler.snooze() }
     func decline() { scheduler.decline() }
     func breakNow() { scheduler.breakNow() }
     func togglePause() { isPaused ? scheduler.resume() : scheduler.pause() }
