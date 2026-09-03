@@ -3,6 +3,13 @@
 A tiny macOS menu bar app for the 20/20/20 rule: every 20 minutes of screen
 time, look at something 20 feet away for 20 seconds.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/popup-dark.png">
+    <img src="docs/popup-light.png" alt="Look Away break popup showing a 20-second countdown with Delay 5 min, Delay 10 min, and Decline buttons" width="560">
+  </picture>
+</p>
+
 ## Behavior
 
 - Lives in the menu bar (eye icon). No Dock icon, no main window.
