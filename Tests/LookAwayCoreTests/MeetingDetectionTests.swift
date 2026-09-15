@@ -15,9 +15,9 @@ final class FakeActivityProbe: MeetingActivityProbing {
 }
 
 @MainActor
-struct MeetingAppMatchingTests {
-    let zoom = MeetingApp.preset(for: "us.zoom.xos")!
-    let pop = MeetingApp(bundleID: "com.pop.pop.app", name: "Pop")
+struct ChosenAppMatchingTests {
+    let zoom = ChosenApp.preset(for: "us.zoom.xos")!
+    let pop = ChosenApp(bundleID: "com.pop.pop.app", name: "Pop")
 
     @Test func matchesTheAppItself() {
         #expect(zoom.matches(processBundleID: "us.zoom.xos"))
@@ -37,21 +37,21 @@ struct MeetingAppMatchingTests {
     /// Arc ships as `company.thebrowser.Browser` but captures from
     /// `company.thebrowser.browser.helper`.
     @Test func matchesRegardlessOfCase() {
-        let arc = MeetingApp(bundleID: "company.thebrowser.Browser", name: "Arc")
+        let arc = ChosenApp(bundleID: "company.thebrowser.Browser", name: "Arc")
         #expect(arc.matches(processBundleID: "company.thebrowser.browser.helper"))
     }
 
     @Test func doesNotMatchAnUnrelatedApp() {
         #expect(!pop.matches(processBundleID: "com.spotify.client"))
         // A shared prefix that is not a bundle-ID boundary must not match.
-        #expect(!MeetingApp(bundleID: "com.foo", name: "Foo").matches(processBundleID: "com.foobar"))
+        #expect(!ChosenApp(bundleID: "com.foo", name: "Foo").matches(processBundleID: "com.foobar"))
     }
 }
 
 @MainActor
 struct MeetingEvidenceTests {
     private var settings: MeetingSettings {
-        MeetingSettings(isEnabled: true, apps: [MeetingApp.preset(for: "us.zoom.xos")!])
+        MeetingSettings(isEnabled: true, apps: [ChosenApp.preset(for: "us.zoom.xos")!])
     }
 
     @Test func microphoneUseByAChosenAppIsAMeeting() {
@@ -146,7 +146,7 @@ struct MeetingEvidenceTests {
 struct MeetingMonitorTests {
     let clock = FakeTimekeeper()
     let probe = FakeActivityProbe()
-    let zoom = MeetingApp.preset(for: "us.zoom.xos")!
+    let zoom = ChosenApp.preset(for: "us.zoom.xos")!
 
     private func makeMonitor(delay: TimeInterval = 15, grace: TimeInterval = 30) -> MeetingMonitor {
         let settings = MeetingSettings(
@@ -284,19 +284,19 @@ struct MeetingSettingsTests {
     @Test func addingAnAppInheritsThePresetsProcessPrefixes() {
         var settings = MeetingSettings()
         // As the installed-apps list would offer it: bundle ID and name only.
-        settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "zoom.us"))
+        settings.add(ChosenApp(bundleID: "us.zoom.xos", name: "zoom.us"))
         #expect(settings.apps[0].matches(processBundleID: "us.zoom.caphost"))
     }
 
     @Test func appsAreNotAddedTwice() {
         var settings = MeetingSettings()
-        settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "Zoom"))
-        settings.add(MeetingApp(bundleID: "US.ZOOM.XOS", name: "Zoom"))
+        settings.add(ChosenApp(bundleID: "us.zoom.xos", name: "Zoom"))
+        settings.add(ChosenApp(bundleID: "US.ZOOM.XOS", name: "Zoom"))
         #expect(settings.apps.count == 1)
     }
 
     @Test func removingAnAppIsCaseInsensitive() {
-        var settings = MeetingSettings(isEnabled: true, apps: [MeetingApp(bundleID: "us.zoom.xos", name: "Zoom")])
+        var settings = MeetingSettings(isEnabled: true, apps: [ChosenApp(bundleID: "us.zoom.xos", name: "Zoom")])
         settings.remove("US.ZOOM.XOS")
         #expect(settings.apps.isEmpty)
     }
@@ -321,7 +321,7 @@ struct MeetingSettingsTests {
     }
 
     @Test func settingsSurviveARoundTrip() throws {
-        var original = MeetingSettings(isEnabled: true, apps: [MeetingApp.presets[0]])
+        var original = MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPresets[0]])
         original.countsAudioOutput = true
         let decoded = try JSONDecoder().decode(
             MeetingSettings.self,

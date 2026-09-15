@@ -18,12 +18,23 @@ public final class BreakScheduler {
         /// The clock is outside the user's schedule. `until` is the next
         /// opening, or nil when no day is active.
         case offSchedule(until: Date?)
-        /// A meeting is in progress, so the popup is held back — but the
-        /// countdown carries on underneath it. `dueAt` is the moment the break
-        /// is owed, and it can be in the past: a break that came due mid-call
-        /// is taken as soon as the call ends, rather than starting the wait
-        /// over and leaving you a full interval short of a rest you had earned.
-        case inMeeting(dueAt: Date)
+        /// Something is holding the popup back — a meeting, or an app the user
+        /// asked not to be interrupted in — but the countdown carries on
+        /// underneath it. `dueAt` is the moment the break is owed, and it can
+        /// be in the past: a break that came due mid-hold is taken as soon as
+        /// the hold lifts, rather than starting the wait over and leaving you a
+        /// full interval short of a rest you had earned.
+        case held(dueAt: Date, by: HoldReason)
+    }
+
+    /// Why the popup is being held back. Several can apply at once — a call
+    /// taken while a game is up — so each is released by whoever placed it and
+    /// the popup waits for the last one to lift.
+    public enum HoldReason: Equatable, Sendable {
+        /// A meeting, from microphone or camera use.
+        case meeting
+        /// One of the user's chosen apps is the app they are in.
+        case app
     }
 
     public enum Event: Equatable, Sendable {
@@ -47,9 +58,9 @@ public final class BreakScheduler {
     private let clock: Timekeeper
     private let calendar: Calendar
     private var pending: ScheduledTask?
-    /// Set by `meetingDidStart()` / `meetingDidEnd()`. Consulted whenever the
-    /// next wait is armed, so a meeting outlasts any single transition.
-    private var isInMeeting = false
+    /// Every hold currently placed. Consulted whenever the next wait is armed,
+    /// so a hold outlasts any single transition.
+    private var holds: Set<HoldReason> = []
 
     public init(
         config: Config = .standard,
@@ -95,9 +106,9 @@ public final class BreakScheduler {
         // A break delayed while on a call is still a call, and that is the more
         // useful thing to be told: "delayed" suggests the wait is the only
         // reason nothing is happening. The popup is held either way, and the
-        // delay's own deadline carries over as the one the meeting owes.
-        if isInMeeting {
-            state = .inMeeting(dueAt: until)
+        // delay's own deadline carries over as the one the hold owes.
+        if let reason = primaryHold {
+            state = .held(dueAt: until, by: reason)
             emit(.scheduleChanged)
             return
         }
@@ -124,18 +135,25 @@ public final class BreakScheduler {
         reevaluate()
     }
 
-    /// A meeting started. Holds the popup back and closes one already up — the
-    /// whole point is not to be interrupted on a call — while keeping the
-    /// deadline the countdown was working towards, so time on the call still
-    /// counts. A user pause outranks this and is left alone.
-    public func meetingDidStart() {
-        isInMeeting = true
-        guard state != .stopped else { return }
+    /// Place a hold. Holds the popup back and closes one already up — the whole
+    /// point is not to be interrupted — while keeping the deadline the
+    /// countdown was working towards, so the time still counts. A user pause
+    /// outranks this and is left alone.
+    public func hold(_ reason: HoldReason) {
+        holds.insert(reason)
+        guard let primary = primaryHold, state != .stopped else { return }
         switch state {
-        case .paused, .inMeeting:
+        case .paused:
+            return
+        // Already held: the second reason is recorded above and only changes
+        // what the menu says, if it outranks the one on display.
+        case .held(let dueAt, let current):
+            guard current != primary else { return }
+            state = .held(dueAt: dueAt, by: primary)
+            emit(.scheduleChanged)
             return
         // Outside the scheduled hours nothing is pending anyway, and that hold
-        // already outlasts the call.
+        // already outlasts this one.
         case .offSchedule:
             return
         case .idle, .breaking, .snoozed, .stopped:
@@ -144,8 +162,16 @@ public final class BreakScheduler {
         let dueAt = currentDeadline()
         cancelPending()
         if case .breaking = state { emit(.breakDismissed) }
-        state = .inMeeting(dueAt: dueAt)
+        state = .held(dueAt: dueAt, by: primary)
         emit(.scheduleChanged)
+    }
+
+    /// The reason shown while a hold is on. A meeting outranks an app: being
+    /// on a call is the more useful thing to be told, and it is the one with an
+    /// end someone else decides.
+    private var primaryHold: HoldReason? {
+        if holds.contains(.meeting) { return .meeting }
+        return holds.isEmpty ? nil : .app
     }
 
     /// When the break the current state was heading towards is owed.
@@ -155,20 +181,32 @@ public final class BreakScheduler {
             return fireAt
         case .snoozed(let until):
             return until
-        // A break cut short by the call was never taken, so it is owed the
-        // moment the call ends.
+        // A break cut short by the hold was never taken, so it is owed the
+        // moment the hold lifts.
         case .breaking:
             return clock.now()
-        case .stopped, .paused, .offSchedule, .inMeeting:
+        case .stopped, .paused, .offSchedule, .held:
             return clock.now().addingTimeInterval(config.workInterval)
         }
     }
 
-    /// The meeting ended. The countdown ran through the call, so a break that
-    /// came due during it is taken now; otherwise the remainder plays out.
-    public func meetingDidEnd() {
-        isInMeeting = false
-        guard case .inMeeting(let dueAt) = state else { return }
+    /// Lift a hold. The countdown ran through it, so a break that came due
+    /// while it was on is taken now; otherwise the remainder plays out. Any
+    /// other hold still in place keeps the popup back, and takes over the menu.
+    ///
+    /// Safe to call for a hold that was never placed, which is what switching
+    /// a detector off amounts to.
+    public func release(_ reason: HoldReason) {
+        holds.remove(reason)
+        guard case .held(let dueAt, let current) = state else { return }
+        if let remaining = primaryHold {
+            // Releasing a hold that was not the one on display changes nothing
+            // anyone can see.
+            guard remaining != current else { return }
+            state = .held(dueAt: dueAt, by: remaining)
+            emit(.scheduleChanged)
+            return
+        }
         guard schedule.allows(clock.now(), calendar: calendar) else {
             enterOffSchedule()
             return
@@ -178,12 +216,6 @@ public final class BreakScheduler {
         } else {
             scheduleWork(dueAt: dueAt)
         }
-    }
-
-    /// Meeting detection was switched off, so drop any hold it was placing.
-    public func meetingDetectionDidStop() {
-        meetingDidEnd()
-        isInMeeting = false
     }
 
     /// User turned reminders off from the menu.
@@ -222,8 +254,8 @@ public final class BreakScheduler {
     /// interval away when a countdown is being picked back up mid-flight.
     private func scheduleWork(dueAt: Date) {
         cancelPending()
-        if isInMeeting {
-            state = .inMeeting(dueAt: dueAt)
+        if let reason = primaryHold {
+            state = .held(dueAt: dueAt, by: reason)
             emit(.scheduleChanged)
             return
         }
@@ -251,7 +283,7 @@ public final class BreakScheduler {
     /// without a timer have nothing to re-check.
     private func reevaluate() {
         switch state {
-        case .stopped, .paused, .breaking, .inMeeting:
+        case .stopped, .paused, .breaking, .held:
             return
         case .idle, .snoozed, .offSchedule:
             cancelPending()
@@ -265,9 +297,9 @@ public final class BreakScheduler {
         let now = clock.now()
         switch state {
         case .idle(let target), .snoozed(let target):
-            if isInMeeting {
+            if let reason = primaryHold {
                 cancelPending()
-                state = .inMeeting(dueAt: target)
+                state = .held(dueAt: target, by: reason)
                 emit(.scheduleChanged)
                 return
             }
@@ -285,7 +317,7 @@ public final class BreakScheduler {
             }
         case .offSchedule:
             armWork()
-        case .stopped, .paused, .breaking, .inMeeting:
+        case .stopped, .paused, .breaking, .held:
             break
         }
     }

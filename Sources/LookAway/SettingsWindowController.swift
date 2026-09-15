@@ -109,8 +109,8 @@ final class SettingsWindowController {
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         // The panel scrolls, so it has no natural height to fit to. Open at a
-        // size that shows both sections expanded and let it be resized.
-        window.setContentSize(NSSize(width: SettingsView.width, height: 620))
+        // size that shows the sections expanded and let it be resized.
+        window.setContentSize(NSSize(width: SettingsView.width, height: 680))
         window.contentMinSize = NSSize(width: SettingsView.width, height: 320)
         window.contentMaxSize = NSSize(width: SettingsView.width, height: .greatestFiniteMagnitude)
         // Reopen where the user left it; only the very first open is centered.

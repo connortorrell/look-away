@@ -24,12 +24,12 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         clock.advance(by: 30)
-        scheduler.meetingDidStart()
-        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+        scheduler.hold(.meeting)
+        #expect(scheduler.state == .held(dueAt: at(100), by: .meeting))
 
         // Well past when the popup would have opened.
         clock.advance(by: 500)
-        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+        #expect(scheduler.state == .held(dueAt: at(100), by: .meeting))
     }
 
     /// The headline case: a long call swallows the break, and it is owed the
@@ -38,10 +38,10 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         clock.advance(by: 30)
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 3_600) // an hour on the call
 
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
@@ -51,9 +51,9 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         clock.advance(by: 30) // 70 left
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 20) // a 20 second call
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
 
         // Still due at the original moment, not 100 seconds from now.
         #expect(scheduler.state == .idle(fireAt: at(100)))
@@ -71,9 +71,9 @@ struct MeetingBreakSchedulerTests {
         var starts = 0
         scheduler.onEvent = { if $0 == .breakStarted { starts += 1 } }
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 1_000)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(starts == 1)
 
         // And the one after it is a full interval later.
@@ -88,11 +88,11 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         clock.advance(by: 50)
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 100) // the timer's moment passes on the call
-        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+        #expect(scheduler.state == .held(dueAt: at(100), by: .meeting))
 
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
@@ -108,12 +108,12 @@ struct MeetingBreakSchedulerTests {
         clock.advance(by: 100)
         #expect(scheduler.state == .breaking(remaining: 5))
 
-        scheduler.meetingDidStart()
-        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+        scheduler.hold(.meeting)
+        #expect(scheduler.state == .held(dueAt: at(100), by: .meeting))
         #expect(events.contains(.breakDismissed))
 
         clock.advance(by: 900)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
@@ -124,11 +124,11 @@ struct MeetingBreakSchedulerTests {
         scheduler.snooze()
         #expect(scheduler.state == .snoozed(until: at(110)))
 
-        scheduler.meetingDidStart()
-        #expect(scheduler.state == .inMeeting(dueAt: at(110)))
+        scheduler.hold(.meeting)
+        #expect(scheduler.state == .held(dueAt: at(110), by: .meeting))
 
         clock.advance(by: 5)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .idle(fireAt: at(110)))
         clock.advance(by: 5)
         #expect(scheduler.state == .breaking(remaining: 5))
@@ -140,24 +140,24 @@ struct MeetingBreakSchedulerTests {
     @Test func delayingDuringAMeetingStillReadsAsAMeeting() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.breakNow()
         #expect(scheduler.state == .breaking(remaining: 5))
 
         scheduler.snooze()
-        #expect(scheduler.state == .inMeeting(dueAt: at(10)))
+        #expect(scheduler.state == .held(dueAt: at(10), by: .meeting))
     }
 
     /// The delay's own deadline is what the meeting then owes.
     @Test func aDelayDuringAMeetingKeepsItsDeadline() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.breakNow()
         scheduler.snooze() // due at 10
 
         clock.advance(by: 5)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .idle(fireAt: at(10)))
 
         clock.advance(by: 5)
@@ -167,12 +167,12 @@ struct MeetingBreakSchedulerTests {
     @Test func aDelayThatRanOutDuringTheCallOpensAtTheEnd() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.breakNow()
         scheduler.snooze() // due at 10
 
         clock.advance(by: 300)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
@@ -192,7 +192,7 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         scheduler.pause()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         #expect(scheduler.state == .paused(byUser: true))
     }
 
@@ -201,16 +201,16 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         scheduler.pause()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.resume()
-        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+        #expect(scheduler.state == .held(dueAt: at(100), by: .meeting))
     }
 
     /// "Take a Break Now" is an explicit request and still works.
     @Test func aBreakCanStillBeTakenByHandDuringAMeeting() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.breakNow()
         #expect(scheduler.state == .breaking(remaining: 5))
     }
@@ -220,17 +220,17 @@ struct MeetingBreakSchedulerTests {
         let scheduler = makeScheduler()
         scheduler.start()
         clock.advance(by: 30)
-        scheduler.meetingDidStart()
-        scheduler.meetingDetectionDidStop()
+        scheduler.hold(.meeting)
+        scheduler.release(.meeting)
         #expect(scheduler.state == .idle(fireAt: at(100)))
     }
 
     @Test func switchingDetectionOffAfterTheBreakCameDueOpensIt() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 300)
-        scheduler.meetingDetectionDidStop()
+        scheduler.release(.meeting)
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
@@ -239,12 +239,12 @@ struct MeetingBreakSchedulerTests {
     @Test func sleepingDuringAMeetingWakesToAFreshInterval() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.systemDidSuspend()
         #expect(scheduler.state == .paused(byUser: false))
 
         clock.advance(by: 50)
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
         scheduler.systemDidResume()
         // Sleep starts the 20 minutes over, as it always has.
         #expect(scheduler.state == .idle(fireAt: at(150)))
@@ -254,11 +254,11 @@ struct MeetingBreakSchedulerTests {
     @Test func wakingIntoAMeetingHoldsAgain() {
         let scheduler = makeScheduler()
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         scheduler.systemDidSuspend()
         clock.advance(by: 40)
         scheduler.systemDidResume()
-        #expect(scheduler.state == .inMeeting(dueAt: at(140)))
+        #expect(scheduler.state == .held(dueAt: at(140), by: .meeting))
     }
 
     // MARK: Schedule
@@ -282,9 +282,9 @@ struct MeetingBreakSchedulerTests {
         let scheduler = BreakScheduler(config: config, schedule: mondayOnly, clock: clock, calendar: utc)
         clock.advance(by: 10 * 3_600) // Monday 10am, inside the window
         scheduler.start()
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         clock.advance(by: 8 * 3_600) // 6pm, the window has closed
-        scheduler.meetingDidEnd()
+        scheduler.release(.meeting)
 
         // Monday is the only active day, so it reopens a week on.
         #expect(scheduler.state == .offSchedule(until: at(7 * 86_400 + 9 * 3_600)))
@@ -297,7 +297,7 @@ struct MeetingBreakSchedulerTests {
         clock.advance(by: 20 * 3_600) // Monday 8pm, outside the window
         scheduler.start()
         let held = scheduler.state
-        scheduler.meetingDidStart()
+        scheduler.hold(.meeting)
         #expect(scheduler.state == held)
     }
 }

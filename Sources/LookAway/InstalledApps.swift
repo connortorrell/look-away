@@ -10,12 +10,13 @@ struct InstalledApp: Identifiable, Hashable {
 
     var id: String { bundleID }
 
-    var meetingApp: MeetingApp {
-        MeetingApp(bundleID: bundleID, name: name)
+    /// The app as one of the picker's chips.
+    var chosen: ChosenApp {
+        ChosenApp(bundleID: bundleID, name: name)
     }
 }
 
-/// The list of apps on this Mac, for the meeting-app picker.
+/// The list of apps on this Mac, for the app pickers in the settings panel.
 ///
 /// Scanned from the usual application folders rather than asked of Launch
 /// Services, because there is no API that just hands over "every installed
@@ -52,9 +53,10 @@ final class InstalledApps {
 
     /// Apps matching `query`, minus the ones already chosen. An empty query
     /// lists everything, which is what the field shows when it opens.
-    func matches(_ query: String, excluding chosen: MeetingSettings) -> [InstalledApp] {
+    func matches(_ query: String, excluding chosen: [ChosenApp]) -> [InstalledApp] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        let available = all.filter { !chosen.contains($0.bundleID) }
+        let taken = Set(chosen.map { $0.bundleID.lowercased() })
+        let available = all.filter { !taken.contains($0.bundleID.lowercased()) }
         guard !trimmed.isEmpty else { return available }
         return available
             .filter { $0.name.localizedCaseInsensitiveContains(trimmed) || $0.bundleID.localizedCaseInsensitiveContains(trimmed) }

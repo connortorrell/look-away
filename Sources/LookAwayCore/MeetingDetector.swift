@@ -35,11 +35,11 @@ public protocol MeetingActivityProbing: AnyObject {
 
 /// Why the monitor thinks a meeting is on. Drives the wording in the menu.
 public enum MeetingEvidence: Equatable, Sendable {
-    case microphone(app: MeetingApp)
-    case camera(app: MeetingApp)
-    case audioOutput(app: MeetingApp)
+    case microphone(app: ChosenApp)
+    case camera(app: ChosenApp)
+    case audioOutput(app: ChosenApp)
 
-    public var app: MeetingApp {
+    public var app: ChosenApp {
         switch self {
         case .microphone(let app), .camera(let app), .audioOutput(let app): return app
         }

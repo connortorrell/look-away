@@ -15,10 +15,12 @@ struct SettingsView: View {
     /// Called when Escape is pressed with nothing focused.
     let close: () -> Void
     @State private var isCustomizingDays: Bool
-    /// Focus for the app search field, held here so a click anywhere else in
-    /// the panel — or Escape — can give it up. Without that there is no way
-    /// out of the field once it is in, and its results list stays open.
-    @FocusState private var isSearchingApps: Bool
+    /// Focus for the two app search fields, held here so a click anywhere else
+    /// in the panel — or Escape — can give it up. Without that there is no way
+    /// out of a field once it is in, and its results list stays open. One each,
+    /// so opening the second does not leave the first looking focused.
+    @FocusState private var isSearchingMeetingApps: Bool
+    @FocusState private var isSearchingPausedApps: Bool
 
     /// Opens with the per-day list showing whenever there is something in it.
     init(model: AppModel, endEditing: @escaping () -> Bool, close: @escaping () -> Void) {
@@ -33,7 +35,9 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 scheduleSection
                 Divider().padding(.vertical, 20)
-                MeetingSettingsView(model: model, isSearching: $isSearchingApps)
+                MeetingSettingsView(model: model, isSearching: $isSearchingMeetingApps)
+                Divider().padding(.vertical, 20)
+                AppPauseSettingsView(model: model, isSearching: $isSearchingPausedApps)
             }
             .padding(24)
             .frame(width: Self.width, alignment: .leading)
@@ -79,8 +83,9 @@ struct SettingsView: View {
     /// Escape can fall through to closing the window when nothing was.
     @discardableResult
     private func giveUpFocus() -> Bool {
-        let wasSearching = isSearchingApps
-        isSearchingApps = false
+        let wasSearching = isSearchingMeetingApps || isSearchingPausedApps
+        isSearchingMeetingApps = false
+        isSearchingPausedApps = false
         // Both run: the time pickers are AppKit and answer separately.
         return endEditing() || wasSearching
     }
