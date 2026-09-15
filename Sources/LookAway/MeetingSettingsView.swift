@@ -6,9 +6,9 @@ import SwiftUI
 /// schedule section above it, so the panel reads as one thing.
 struct MeetingSettingsView: View {
     let model: AppModel
-    /// Owned by `SettingsView`, which needs to be able to clear it when a
-    /// click lands anywhere else in the panel.
-    @FocusState.Binding var isSearching: Bool
+    /// Cleared by the window whenever it takes the keyboard back — Esc, or a
+    /// click anywhere that is not a field — so the results list never sticks.
+    @FocusState private var isSearching: Bool
 
     @State private var query = ""
 

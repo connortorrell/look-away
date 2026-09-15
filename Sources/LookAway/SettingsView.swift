@@ -5,26 +5,16 @@ import LookAwayCore
 /// should get out of the way. Both halves are opt-in and both stay collapsed
 /// to a single toggle until switched on, so the panel opens quiet.
 struct SettingsView: View {
-    /// Wide enough for a row of app chips to read well.
+    /// The window's content width: wide enough for a row of app chips to read
+    /// well. The content fills whatever is left of it beside the scroll bar.
     static let width: CGFloat = 460
 
     let model: AppModel
-    /// Makes the AppKit time pickers give up the keyboard. Reports whether one
-    /// of them actually had it.
-    let endEditing: () -> Bool
-    /// Called when Escape is pressed with nothing focused.
-    let close: () -> Void
     @State private var isCustomizingDays: Bool
-    /// Focus for the app search field, held here so a click anywhere else in
-    /// the panel — or Escape — can give it up. Without that there is no way
-    /// out of the field once it is in, and its results list stays open.
-    @FocusState private var isSearchingApps: Bool
 
     /// Opens with the per-day list showing whenever there is something in it.
-    init(model: AppModel, endEditing: @escaping () -> Bool, close: @escaping () -> Void) {
+    init(model: AppModel) {
         self.model = model
-        self.endEditing = endEditing
-        self.close = close
         _isCustomizingDays = State(initialValue: !model.schedule.overrides.isEmpty)
     }
 
@@ -33,29 +23,19 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 scheduleSection
                 Divider().padding(.vertical, 20)
-                MeetingSettingsView(model: model, isSearching: $isSearchingApps)
+                MeetingSettingsView(model: model)
             }
             .padding(24)
-            .frame(width: Self.width, alignment: .leading)
-        }
-        // Behind everything, and spanning the whole panel rather than just the
-        // content, so a click in the empty space below still counts as one
-        // that missed the fields. Controls sit in front and get the click first.
-        .background(
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { giveUpFocus() }
-        )
-        // Escape hands back whatever holds the keyboard; pressed again, with
-        // nothing focused, it closes the panel the way Escape usually does.
-        .onExitCommand {
-            if !giveUpFocus() { close() }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .animation(.snappy(duration: 0.2), value: schedule.isEnabled)
         .animation(.snappy(duration: 0.2), value: isCustomizingDays)
         .animation(.snappy(duration: 0.2), value: schedule.activeDays)
     }
 
+    /// Schedule editor. Everything below the opt-in toggle stays hidden until
+    /// the user turns the schedule on, and per-day hours stay hidden until they
+    /// ask for them, so the common 9-to-5 case is two controls and nothing else.
     private var scheduleSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -72,17 +52,6 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .padding(.top, 18)
         }
-    }
-
-    /// Leaves nothing focused, covering both kinds of field in the panel.
-    /// Reports whether anything was holding the keyboard to begin with, so
-    /// Escape can fall through to closing the window when nothing was.
-    @discardableResult
-    private func giveUpFocus() -> Bool {
-        let wasSearching = isSearchingApps
-        isSearchingApps = false
-        // Both run: the time pickers are AppKit and answer separately.
-        return endEditing() || wasSearching
     }
 
     // MARK: Sections
