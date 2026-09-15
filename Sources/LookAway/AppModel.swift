@@ -51,9 +51,10 @@ final class AppModel {
             clock: clock
         )
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
+        // Every hold or release the scheduler makes emits an event, and that
+        // event refreshes the display.
         meetings.onChange = { [unowned self] isInMeeting in
             isInMeeting ? self.scheduler.meetingDidStart() : self.scheduler.meetingDidEnd()
-            self.refreshIcon()
         }
     }
 
@@ -82,18 +83,14 @@ final class AppModel {
     }
 
     /// Single write path for meeting-setting edits, mirroring `updateSchedule`.
+    /// Switching the feature off, or dropping the app a meeting was detected
+    /// from, makes the monitor report that meeting's end, which releases the
+    /// scheduler's hold through `onChange`.
     func updateMeetingSettings(_ settings: MeetingSettings) {
         guard settings != meetingSettings else { return }
-        let wasEnabled = meetingSettings.isEnabled
         meetingSettings = settings
         meetingStore.save(settings)
         meetings.apply(settings: settings)
-        // Turning it off has to release a hold the monitor already placed;
-        // it will not report an end for a meeting it stopped watching.
-        if wasEnabled, !settings.isEnabled {
-            scheduler.meetingDetectionDidStop()
-        }
-        refreshIcon()
     }
 
     /// Called when the settings panel opens. Fills an untouched app list with

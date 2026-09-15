@@ -240,8 +240,12 @@ struct MeetingMonitorTests {
         #expect(changes == [true, false])
     }
 
+    /// Switching off has to report the end of a meeting already under way:
+    /// that report is what releases the scheduler's hold.
     @Test func switchingOffStopsPollingAndClearsTheMeeting() {
         let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
         monitor.start()
         startMeeting()
         clock.advance(by: 20)
@@ -249,6 +253,7 @@ struct MeetingMonitorTests {
 
         monitor.apply(settings: MeetingSettings(isEnabled: false, apps: [zoom]))
         #expect(!monitor.isInMeeting)
+        #expect(changes == [true, false])
 
         let before = probe.sampleCount
         clock.advance(by: 120)

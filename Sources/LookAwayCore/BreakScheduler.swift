@@ -92,13 +92,13 @@ public final class BreakScheduler {
         emit(.breakDismissed)
         let now = clock.now()
         let until = now.addingTimeInterval(config.snoozeInterval)
-        // A break delayed while on a call is still a call, and that is the more
-        // useful thing to be told: "delayed" suggests the wait is the only
-        // reason nothing is happening. The popup is held either way, and the
-        // delay's own deadline carries over as the one the meeting owes.
         if isInMeeting {
-            state = .inMeeting(dueAt: until)
-            emit(.scheduleChanged)
+            // A break delayed while on a call is still a call, and that is the
+            // more useful thing to be told: "delayed" suggests the wait is the
+            // only reason nothing is happening. The popup is held either way,
+            // and the delay's own deadline carries over as the one the meeting
+            // owes.
+            holdForMeeting(dueAt: until)
             return
         }
         state = .snoozed(until: until)
@@ -127,63 +127,34 @@ public final class BreakScheduler {
     /// A meeting started. Holds the popup back and closes one already up — the
     /// whole point is not to be interrupted on a call — while keeping the
     /// deadline the countdown was working towards, so time on the call still
-    /// counts. A user pause outranks this and is left alone.
+    /// counts. A user pause, the schedule's own hold, and a scheduler that has
+    /// not started yet are left alone: the flag carries the meeting into
+    /// whatever is armed next.
     public func meetingDidStart() {
         isInMeeting = true
-        guard state != .stopped else { return }
-        switch state {
-        case .paused, .inMeeting:
-            return
-        // Outside the scheduled hours nothing is pending anyway, and that hold
-        // already outlasts the call.
-        case .offSchedule:
-            return
-        case .idle, .breaking, .snoozed, .stopped:
-            break
-        }
-        let dueAt = currentDeadline()
-        cancelPending()
-        if case .breaking = state { emit(.breakDismissed) }
-        state = .inMeeting(dueAt: dueAt)
-        emit(.scheduleChanged)
-    }
-
-    /// When the break the current state was heading towards is owed.
-    private func currentDeadline() -> Date {
+        let dueAt: Date
         switch state {
         case .idle(let fireAt):
-            return fireAt
+            dueAt = fireAt
         case .snoozed(let until):
-            return until
-        // A break cut short by the call was never taken, so it is owed the
-        // moment the call ends.
+            dueAt = until
         case .breaking:
-            return clock.now()
+            // Cut short, so never taken: owed the moment the call ends.
+            dueAt = clock.now()
         case .stopped, .paused, .offSchedule, .inMeeting:
-            return clock.now().addingTimeInterval(config.workInterval)
+            return
         }
+        cancelPending()
+        if case .breaking = state { emit(.breakDismissed) }
+        holdForMeeting(dueAt: dueAt)
     }
 
     /// The meeting ended. The countdown ran through the call, so a break that
-    /// came due during it is taken now; otherwise the remainder plays out.
+    /// came due during it opens now; otherwise the remainder plays out.
     public func meetingDidEnd() {
         isInMeeting = false
         guard case .inMeeting(let dueAt) = state else { return }
-        guard schedule.allows(clock.now(), calendar: calendar) else {
-            enterOffSchedule()
-            return
-        }
-        if dueAt <= clock.now() {
-            beginBreak()
-        } else {
-            scheduleWork(dueAt: dueAt)
-        }
-    }
-
-    /// Meeting detection was switched off, so drop any hold it was placing.
-    public func meetingDetectionDidStop() {
-        meetingDidEnd()
-        isInMeeting = false
+        waitForBreak(dueAt: dueAt)
     }
 
     /// User turned reminders off from the menu.
@@ -213,27 +184,46 @@ public final class BreakScheduler {
 
     // MARK: - Transitions
 
-    /// Start the wait over, a full interval from now.
+    /// A fresh work interval from now.
     private func armWork() {
-        scheduleWork(dueAt: clock.now().addingTimeInterval(config.workInterval))
+        waitForBreak(dueAt: clock.now().addingTimeInterval(config.workInterval))
     }
 
-    /// Wait for the break owed at `dueAt`, which may be less than a full
-    /// interval away when a countdown is being picked back up mid-flight.
-    private func scheduleWork(dueAt: Date) {
+    /// Head for the break owed at `dueAt`: a full interval away from
+    /// `armWork()`, or whatever was left when a meeting ended. The schedule's
+    /// hold wins; a meeting holds the popup but keeps `dueAt`; a deadline that
+    /// has already passed opens the break straight away.
+    private func waitForBreak(dueAt: Date) {
         cancelPending()
-        if isInMeeting {
-            state = .inMeeting(dueAt: dueAt)
-            emit(.scheduleChanged)
-            return
-        }
         let now = clock.now()
         guard schedule.allows(now, calendar: calendar) else {
             enterOffSchedule()
             return
         }
+        if isInMeeting {
+            holdForMeeting(dueAt: dueAt)
+            return
+        }
+        guard dueAt > now else {
+            beginBreak()
+            return
+        }
         state = .idle(fireAt: dueAt)
         wait(until: dueAt)
+        emit(.scheduleChanged)
+    }
+
+    /// Hold the popup for the meeting while the countdown runs on towards
+    /// `dueAt`. Nothing is armed for the break itself — `meetingDidEnd()`
+    /// reads the clock — but the schedule closing still has to be noticed, so
+    /// that edge is waited for as usual.
+    private func holdForMeeting(dueAt: Date) {
+        cancelPending()
+        state = .inMeeting(dueAt: dueAt)
+        let now = clock.now()
+        if let close = schedule.currentWindowEnd(at: now, calendar: calendar) {
+            pending = clock.schedule(after: close.timeIntervalSince(now)) { [weak self] in self?.evaluate() }
+        }
         emit(.scheduleChanged)
     }
 
@@ -251,9 +241,9 @@ public final class BreakScheduler {
     /// without a timer have nothing to re-check.
     private func reevaluate() {
         switch state {
-        case .stopped, .paused, .breaking, .inMeeting:
+        case .stopped, .paused, .breaking:
             return
-        case .idle, .snoozed, .offSchedule:
+        case .idle, .snoozed, .offSchedule, .inMeeting:
             cancelPending()
             evaluate()
         }
@@ -265,12 +255,6 @@ public final class BreakScheduler {
         let now = clock.now()
         switch state {
         case .idle(let target), .snoozed(let target):
-            if isInMeeting {
-                cancelPending()
-                state = .inMeeting(dueAt: target)
-                emit(.scheduleChanged)
-                return
-            }
             guard schedule.allows(now, calendar: calendar) else {
                 enterOffSchedule()
                 return
@@ -283,9 +267,18 @@ public final class BreakScheduler {
             } else {
                 beginBreak()
             }
+        case .inMeeting(let dueAt):
+            // The window closed under the hold, or the schedule or clock
+            // changed. The schedule's hold wins; otherwise the meeting's hold
+            // and its deadline stand, against whatever the window edge is now.
+            guard schedule.allows(now, calendar: calendar) else {
+                enterOffSchedule()
+                return
+            }
+            holdForMeeting(dueAt: dueAt)
         case .offSchedule:
             armWork()
-        case .stopped, .paused, .breaking, .inMeeting:
+        case .stopped, .paused, .breaking:
             break
         }
     }
