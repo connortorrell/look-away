@@ -38,8 +38,8 @@ struct MeetingSettingsView: View {
     private var header: some View {
         Toggle(isOn: binding(\.isEnabled)) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Pause reminders during meetings").font(.headline)
-                Text("Holds the popup while one of the apps below is using the mic or camera.")
+                Text("Pause the cycle during raids").font(.headline)
+                Text("Holds night back while one of the apps below is using the mic or camera.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +50,7 @@ struct MeetingSettingsView: View {
 
     private var appsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SettingsSectionLabel("Apps that count as a meeting")
+            SettingsSectionLabel("Apps that count as a raid")
             AppTokenField(
                 apps: settings.apps,
                 query: $query,
@@ -72,8 +72,8 @@ struct MeetingSettingsView: View {
     private var delaySection: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Detection delay").font(.subheadline.weight(.medium))
-                Text("How long the mic has to stay busy before it counts.")
+                Text("Bell delay").font(.subheadline.weight(.medium))
+                Text("How long the mic has to stay busy before the bell rings.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -92,7 +92,7 @@ struct MeetingSettingsView: View {
         Toggle(isOn: binding(\.countsCamera)) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Count camera use too").font(.subheadline.weight(.medium))
-                Text("Keeps you covered while muted but on video.")
+                Text("Keeps you covered while muted but still on camera.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -105,7 +105,7 @@ struct MeetingSettingsView: View {
         Toggle(isOn: binding(\.countsAudioOutput)) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Count audio playing too").font(.subheadline.weight(.medium))
-                Text("Catches listen-only calls. May also pause for videos and notification sounds.")
+                Text("Catches listen-only raids. May also pause for videos and notification sounds.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -124,13 +124,13 @@ struct MeetingSettingsView: View {
 
     private var appsFootnote: String {
         guard !settings.apps.isEmpty else {
-            return "No apps chosen, so nothing will be detected as a meeting."
+            return "No apps chosen, so no raid will ever be detected."
         }
         return "Detected from real microphone and camera use — not from which app is in front."
     }
 
     private static func label(for delay: TimeInterval) -> String {
-        delay == 0 ? "Immediately" : "\(Int(delay)) sec"
+        delay == 0 ? "Immediately" : "\(Int(delay)) sec (\(MinecraftTime.ticks(seconds: delay)) ticks)"
     }
 
     private func edit(_ change: (inout MeetingSettings) -> Void) {

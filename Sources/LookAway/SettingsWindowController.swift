@@ -102,7 +102,7 @@ final class SettingsWindowController {
             )
         )
         let window = SettingsWindow(contentViewController: hosting)
-        window.title = "Look Away Settings"
+        window.title = "Mine Away Settings"
         // No `.fullSizeContentView`: that draws the content up behind the
         // titlebar, which a scrolling panel then slides its controls under.
         // A plain titlebar gives the content a hard edge to stop against.

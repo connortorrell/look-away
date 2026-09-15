@@ -90,8 +90,8 @@ struct SettingsView: View {
     private var header: some View {
         Toggle(isOn: binding(\.isEnabled)) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Only remind me on a schedule").font(.headline)
-                Text("Off means reminders run any time you're at the computer.")
+                Text("Only run the cycle on a schedule").font(.headline)
+                Text("Off means the sun rises and sets any time you're at the computer.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -383,12 +383,12 @@ private extension TimeOfDay {
 private extension Schedule {
     /// One plain-language line describing what is actually going to happen.
     var summary: String {
-        guard isEnabled else { return "Reminders run all day, every day." }
+        guard isEnabled else { return "The cycle runs all day, every day." }
         let days = Weekday.week.filter(isActive)
-        guard !days.isEmpty else { return "No days selected — reminders are off." }
+        guard !days.isEmpty else { return "No days selected — the sun is stuck." }
         let names = days.map { String($0.name.prefix(3)) }.formatted(.list(type: .and))
-        guard overrides.isEmpty else { return "Reminders run on \(names), with custom hours on some days." }
-        if hours.isAllDay { return "Reminders run all day on \(names)." }
-        return "Reminders run on \(names), \(hours.formatted)."
+        guard overrides.isEmpty else { return "The cycle runs on \(names), with custom hours on some days." }
+        if hours.isAllDay { return "The cycle runs all day on \(names)." }
+        return "The cycle runs on \(names), \(hours.formatted)."
     }
 }

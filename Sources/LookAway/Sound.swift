@@ -1,7 +1,8 @@
 import AppKit
 
 enum Sound {
-    static func playChime() {
+    /// The closest thing macOS ships to an XP orb.
+    static func playLevelUp() {
         NSSound(named: "Glass")?.play()
     }
 }

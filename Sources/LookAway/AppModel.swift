@@ -9,7 +9,7 @@ import Observation
 final class AppModel {
     enum BreakPhase { case counting, done }
 
-    private(set) var iconName = "eye"
+    private(set) var iconName = "cube"
     private(set) var remainingSeconds = 0
     private(set) var breakPhase: BreakPhase = .counting
     private(set) var launchAtLoginEnabled = false
@@ -135,7 +135,7 @@ final class AppModel {
             remainingSeconds = remaining
         case .breakCompleted:
             breakPhase = .done
-            Sound.playChime()
+            Sound.playLevelUp()
             doneHide = clock.schedule(after: 1.2) { [weak self] in self?.panel?.hide() }
         case .breakDismissed:
             cancelDoneHide()
@@ -176,34 +176,34 @@ final class AppModel {
         case .stopped:
             return "Starting…"
         case .idle(let fireAt):
-            return "Next break in \(Self.format(fireAt.timeIntervalSince(clock.now())))"
+            return "Sunset in \(Self.format(fireAt.timeIntervalSince(clock.now())))"
         case .breaking:
-            return "Break in progress"
+            return "Night — mobs are spawning"
         case .snoozed(let until):
-            return "Delayed — back in \(Self.format(until.timeIntervalSince(clock.now())))"
+            return "Sleeping — morning in \(Self.format(until.timeIntervalSince(clock.now())))"
         case .paused(let byUser):
-            return byUser ? "Paused" : "Paused (screen locked)"
+            return byUser ? "Peaceful mode" : "Paused (game is paused)"
         case .offSchedule(let until):
             // `until` is only nil when no day is switched on.
             guard let until else { return "No days scheduled" }
-            return "Outside schedule — back \(Self.formatOpening(until, from: clock.now()))"
+            return "Spawn chunks unloaded — back \(Self.formatOpening(until, from: clock.now()))"
         case .inMeeting(let dueAt):
-            let lead = meetings.evidence.map { "\($0.app.name) meeting" } ?? "In a meeting"
+            let lead = meetings.evidence.map { "\($0.app.name) raid" } ?? "Raid in progress"
             let remaining = dueAt.timeIntervalSince(clock.now())
-            // The countdown keeps running on a call, so it can already be owed.
-            guard remaining > 0 else { return "\(lead) — break when you're free" }
-            return "\(lead) — next break in \(Self.format(remaining))"
+            // The cycle keeps running through a raid, so night can already be owed.
+            guard remaining > 0 else { return "\(lead) — night when the bell stops" }
+            return "\(lead) — sunset in \(Self.format(remaining))"
         }
     }
 
     private func refreshIcon() {
         let icon: String
         switch scheduler.state {
-        case .breaking: icon = "eye.slash"
+        case .breaking: icon = "moon.stars"
         case .paused: icon = "pause.circle"
         case .offSchedule: icon = "moon.zzz"
-        case .inMeeting: icon = "video"
-        case .stopped, .idle, .snoozed: icon = "eye"
+        case .inMeeting: icon = "bell.badge"
+        case .stopped, .idle, .snoozed: icon = "cube"
         }
         if icon != iconName { iconName = icon }
     }
@@ -222,8 +222,11 @@ final class AppModel {
         return daysAway >= 7 ? "next \(weekday) at \(time)" : "\(weekday) at \(time)"
     }
 
+    /// "4:32 (5,440 ticks)". Minutes and seconds are there for people who have
+    /// not yet made the adjustment.
     private static func format(_ interval: TimeInterval) -> String {
         let total = max(0, Int(interval.rounded(.up)))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        let clock = String(format: "%d:%02d", total / 60, total % 60)
+        return "\(clock) (\(MinecraftTime.formatted(ticks: MinecraftTime.ticks(seconds: TimeInterval(total)))))"
     }
 }

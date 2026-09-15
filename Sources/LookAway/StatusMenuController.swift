@@ -13,7 +13,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private let pauseItem = NSMenuItem(title: "", action: #selector(togglePause), keyEquivalent: "")
-    private let breakNowItem = NSMenuItem(title: "Take a Break Now", action: #selector(breakNow), keyEquivalent: "")
+    private let breakNowItem = NSMenuItem(title: "Skip to Night", action: #selector(breakNow), keyEquivalent: "")
     private let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
     private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
     private let loginErrorItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -37,7 +37,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         loginErrorItem.isEnabled = false
         loginErrorItem.isHidden = true
 
-        let quitItem = NSMenuItem(title: "Quit Look Away", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Mine Away", action: #selector(quit), keyEquivalent: "q")
 
         for item in [pauseItem, breakNowItem, settingsItem, loginItem, quitItem] {
             item.target = self
@@ -47,7 +47,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // symbol or a checkmark, so a section without one sits flush and looks
         // misaligned next to Launch at Login. Every section gets a symbol; the
         // actions show the icon of the state they lead to.
-        breakNowItem.image = Self.symbol("eye.slash")
+        breakNowItem.image = Self.symbol("moon.stars")
         settingsItem.image = Self.symbol("gearshape")
         quitItem.image = Self.symbol("power")
 
@@ -86,7 +86,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private func refreshItems() {
         statusLine.title = model.statusText
         statusLine.image = Self.symbol(model.iconName)
-        pauseItem.title = model.isPaused ? "Resume Reminders" : "Pause Reminders"
+        pauseItem.title = model.isPaused ? "Leave Peaceful Mode" : "Switch to Peaceful"
         pauseItem.image = Self.symbol(model.isPaused ? "play.circle" : "pause.circle")
         breakNowItem.isEnabled = !model.isBreaking
         loginItem.state = model.launchAtLoginEnabled ? .on : .off
@@ -97,7 +97,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// Re-applies the icon whenever `model.iconName` changes.
     private func observeIcon() {
         withObservationTracking {
-            let image = NSImage(systemSymbolName: model.iconName, accessibilityDescription: "Look Away")
+            let image = NSImage(systemSymbolName: model.iconName, accessibilityDescription: "Mine Away")
             image?.isTemplate = true
             statusItem.button?.image = image
         } onChange: { [weak self] in

@@ -1,4 +1,4 @@
-APP      := Look Away
+APP      := Mine Away
 BUNDLE   := build/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
 BINARY   := .build/release/LookAway

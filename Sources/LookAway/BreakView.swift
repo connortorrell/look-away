@@ -6,7 +6,7 @@ struct BreakView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: model.breakPhase == .done ? "checkmark.circle" : "eye")
+            Image(systemName: model.breakPhase == .done ? "checkmark.circle" : "cube")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(.secondary)
 
@@ -18,14 +18,14 @@ struct BreakView: View {
                 .frame(minHeight: 84)
 
             Text(model.breakPhase == .done
-                 ? "Nice. Back to it."
-                 : "Look at something 20 feet away")
+                 ? "Advancement made: Not Today, Enderman"
+                 : "Look at something 20 blocks away")
                 .font(.title3)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 10) {
-                Button("Delay 5 min") { model.snooze() }
-                Button("Decline") { model.decline() }
+                Button("Sleep (6000 ticks)") { model.snooze() }
+                Button("Make Eye Contact") { model.decline() }
                     .buttonStyle(PanelButtonStyle(role: .quiet))
             }
             .buttonStyle(PanelButtonStyle(role: .normal))
