@@ -23,7 +23,8 @@ time, look at something 20 feet away for 20 seconds.
 - The next 20-minute interval starts when the panel closes (finished or
   declined), never from a snooze.
 - Sleep or screen lock pauses everything; wake or unlock starts a fresh
-  20 minutes. Meetings hold reminders the same way, if you switch that on.
+  20 minutes. Meetings hold the popup too, if you switch that on — but the
+  20 minutes keeps counting (see below).
 - Menu: live "Next break in m:ss", Pause / Resume Reminders, Take a Break Now,
   Launch at Login, Settings, Quit.
 
@@ -53,13 +54,18 @@ reminders run around the clock, exactly as before.
   window closes. **Take a Break Now** still works.
 
 The schedule is saved to preferences and applied the moment it is edited, without
-restarting the current 20 minutes. The settings window closes with ⌘W or Esc and
-reopens where you left it.
+restarting the current 20 minutes. The settings window closes with ⌘W or Esc —
+if a field has the keyboard, the first Esc hands it back and the second closes —
+and reopens where you left it.
 
 ## Meetings
 
 The same panel can hold reminders while you're on a call. Also opt-in: leave
 **Pause reminders during meetings** off and nothing is watched at all.
+
+<p align="center">
+  <img src="docs/settings-meetings.png" alt="Look Away settings panel with the schedule off and meeting detection on: chips for Zoom, Microsoft Teams, Slack, Pop, Discord and FaceTime over a search field listing matching installed apps, a 15-second detection delay, camera use counted and audio playing not" width="470">
+</p>
 
 - **Apps that count as a meeting** is a list of chips over a search field. Type
   to search every app installed on the Mac and click one to add it; click the
@@ -95,7 +101,8 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   counts, so a notification chime or a quick "can you hear me?" doesn't hold
   anything. Once a meeting is on, a 30-second grace period keeps a spell on
   mute — or the gap between two back-to-back calls — from letting a popup
-  through.
+  through. That grace is also why a break owed at the end of a call arrives
+  about half a minute after you hang up rather than the instant you do.
 - **The 20 minutes keeps running through a call.** Only the popup is held
   back, so time on the call still counts towards the next break:
   - A break that came due during the call opens the moment you hang up —
@@ -111,6 +118,8 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   during the call — being on a call is the more useful thing to be told, and
   the delay's own deadline becomes the one the meeting owes. **Take a Break
   Now** still works, and pausing from the menu still outranks detection.
+- The schedule still wins: when the scheduled hours end mid-call the hold
+  hands over to the schedule, and nothing is owed when the call ends.
 
 Capture processes don't always share their app's bundle ID — Zoom captures from
 `us.zoom.caphost` alongside `us.zoom.xos`, and Electron apps capture from a
