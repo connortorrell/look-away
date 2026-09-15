@@ -57,15 +57,12 @@ struct SettingsView: View {
     // MARK: Sections
 
     private var header: some View {
-        Toggle(isOn: binding(\.isEnabled)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Only remind me on a schedule").font(.headline)
-                Text("Off means reminders run any time you're at the computer.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Only remind me on a schedule",
+            detail: "Off means reminders run any time you're at the computer.",
+            prominence: .section,
+            isOn: binding(\.isEnabled)
+        )
     }
 
     private var daysSection: some View {
@@ -302,6 +299,43 @@ private struct TimeField: View {
                 if let parsed = TimeOfDay(date: date, calendar: calendar) { time = parsed }
             }
         )
+    }
+}
+
+/// A switch on the trailing edge with its title and explanation on the leading
+/// side. Every switch in the panel goes through this so they all share one
+/// edge, whatever the length of the text beside them.
+struct SettingsToggleRow: View {
+    enum Prominence { case section, option }
+
+    let title: String
+    let detail: String
+    let prominence: Prominence
+    @Binding var isOn: Bool
+
+    init(_ title: String, detail: String, prominence: Prominence = .option, isOn: Binding<Bool>) {
+        self.title = title
+        self.detail = detail
+        self.prominence = prominence
+        _isOn = isOn
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(prominence == .section ? .headline : .subheadline.weight(.medium))
+                Text(detail)
+                    .font(prominence == .section ? .subheadline : .footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+            Toggle(title, isOn: $isOn)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .accessibilityLabel(title)
+        }
     }
 }
 

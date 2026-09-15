@@ -36,16 +36,12 @@ struct MeetingSettingsView: View {
     // MARK: Sections
 
     private var header: some View {
-        Toggle(isOn: binding(\.isEnabled)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Pause reminders during meetings").font(.headline)
-                Text("Holds the popup while one of the apps below is using the mic or camera.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Pause reminders during meetings",
+            detail: "Holds the popup while you're on a call in one of the apps you choose.",
+            prominence: .section,
+            isOn: binding(\.isEnabled)
+        )
     }
 
     private var appsSection: some View {
@@ -56,6 +52,7 @@ struct MeetingSettingsView: View {
                 query: $query,
                 isSearching: $isSearching,
                 results: results,
+                isLoadingResults: !model.installedApps.isLoaded,
                 add: { app in
                     edit { $0.add(app) }
                     query = ""
@@ -89,30 +86,20 @@ struct MeetingSettingsView: View {
     }
 
     private var cameraToggle: some View {
-        Toggle(isOn: binding(\.countsCamera)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count camera use too").font(.subheadline.weight(.medium))
-                Text("Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Count camera use too",
+            detail: "Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.",
+            isOn: binding(\.countsCamera)
+        )
     }
 
     /// Off by default, and honest about the cost of turning it on.
     private var audioOutputToggle: some View {
-        Toggle(isOn: binding(\.countsAudioOutput)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count audio playing too").font(.subheadline.weight(.medium))
-                Text("Catches listen-only calls. May also pause for videos and notification sounds.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Count audio playing too",
+            detail: "Catches listen-only calls. May also pause for videos and notification sounds.",
+            isOn: binding(\.countsAudioOutput)
+        )
     }
 
     // MARK: Data
@@ -157,6 +144,9 @@ private struct AppTokenField: View {
     @Binding var query: String
     @FocusState.Binding var isSearching: Bool
     let results: [InstalledApp]
+    /// The installed-apps scan has not finished, so an empty `results` means
+    /// "not yet" rather than "no match".
+    let isLoadingResults: Bool
     let add: (MeetingApp) -> Void
     let remove: (String) -> Void
 
@@ -206,9 +196,15 @@ private struct AppTokenField: View {
         }
     }
 
+    private var emptyResultsMessage: String {
+        if isLoadingResults { return "Looking for installed apps…" }
+        if query.isEmpty { return "Every installed app is already in the list." }
+        return "No app matches “\(query)”."
+    }
+
     @ViewBuilder private var resultList: some View {
         if results.isEmpty {
-            Text(query.isEmpty ? "Looking for installed apps…" : "No app matches “\(query)”.")
+            Text(emptyResultsMessage)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
@@ -235,19 +231,22 @@ private struct AppChip: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             Text(app.name).font(.subheadline)
             Button(action: remove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
+                    // The glyph is tiny; the target it sits in is not.
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove \(app.name)")
         }
         .padding(.leading, 8)
-        .padding(.trailing, 6)
-        .padding(.vertical, 4)
+        .padding(.trailing, 1)
+        .padding(.vertical, 1)
         .background(Capsule().fill(Color.primary.opacity(0.09)))
         .help(app.bundleID)
     }
