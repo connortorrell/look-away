@@ -64,8 +64,9 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
 - **Apps that count as a meeting** is a list of chips over a search field. Type
   to search every app installed on the Mac and click one to add it; click the
   × on a chip to drop it. The first time the panel opens, the meeting apps you
-  actually have installed — Zoom, Teams, Slack, Pop, Discord, FaceTime, Webex
-  and the browsers — are filled in for you. Clear the list and it stays clear.
+  actually have installed — Zoom, Teams, Slack, Pop, Discord, FaceTime, Webex,
+  and the browsers (Chrome, Edge, Arc, Brave, Firefox, Safari) — are filled in
+  for you. Clear the list and it stays clear.
 - Detection watches **real device use, not which app is in front**: macOS is
   asked which processes are holding an input stream, so a Zoom window sitting
   in the background during a call still counts, and Zoom merely being open does

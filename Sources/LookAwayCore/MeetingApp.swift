@@ -75,6 +75,9 @@ public extension MeetingApp {
         MeetingApp(bundleID: "com.google.Chrome", name: "Google Chrome", attributesCamera: false),
         MeetingApp(bundleID: "com.microsoft.edgemac", name: "Microsoft Edge", attributesCamera: false),
         MeetingApp(bundleID: "company.thebrowser.Browser", name: "Arc", attributesCamera: false),
+        MeetingApp(bundleID: "com.brave.Browser", name: "Brave", attributesCamera: false),
+        // Firefox captures from its main process rather than a helper.
+        MeetingApp(bundleID: "org.mozilla.firefox", name: "Firefox", attributesCamera: false),
         // Safari hands capture to a shared WebKit process that does not say
         // which browser it came from, so this entry covers any WebKit browser.
         MeetingApp(

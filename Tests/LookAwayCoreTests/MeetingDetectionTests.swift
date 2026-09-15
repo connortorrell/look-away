@@ -41,6 +41,23 @@ struct MeetingAppMatchingTests {
         #expect(arc.matches(processBundleID: "company.thebrowser.browser.helper"))
     }
 
+    /// Every browser in the presets is reachable from its capture process.
+    @Test func matchesEachBrowsersCaptureProcess() {
+        let captures = [
+            ("com.google.Chrome", "com.google.Chrome.helper"),
+            ("com.microsoft.edgemac", "com.microsoft.edgemac.helper"),
+            ("company.thebrowser.Browser", "company.thebrowser.browser.helper"),
+            ("com.brave.Browser", "com.brave.Browser.helper"),
+            ("org.mozilla.firefox", "org.mozilla.firefox"),
+            ("com.apple.Safari", "com.apple.WebKit.GPU"),
+        ]
+        for (bundleID, process) in captures {
+            let browser = MeetingApp.preset(for: bundleID)
+            #expect(browser?.matches(processBundleID: process) == true, "\(bundleID) should own \(process)")
+            #expect(browser?.attributesCamera == false, "\(bundleID) should not be credited with camera use")
+        }
+    }
+
     @Test func doesNotMatchAnUnrelatedApp() {
         #expect(!pop.matches(processBundleID: "com.spotify.client"))
         // A shared prefix that is not a bundle-ID boundary must not match.
