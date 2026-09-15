@@ -80,15 +80,22 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
         apps.first { $0.matches(processBundleID: processBundleID) }
     }
 
+    /// Like `app(owning:)`, but only among the apps camera use may be pinned on.
+    public func cameraApp(owning processBundleID: String) -> MeetingApp? {
+        apps.first { $0.attributesCamera && $0.matches(processBundleID: processBundleID) }
+    }
+
     // MARK: - Editing
 
     public mutating func add(_ app: MeetingApp) {
         guard !contains(app.bundleID) else { return }
-        // Prefer the preset's prefixes: an app picked from the installed list
-        // only knows its own bundle ID, and Zoom's capture process is a sibling.
+        // Prefer the preset's knowledge: an app picked from the installed list
+        // only knows its own bundle ID, and Zoom's capture process is a
+        // sibling, and a browser should not be credited with camera use.
         var app = app
-        if let preset = MeetingApp.preset(for: app.bundleID), app.extraPrefixes.isEmpty {
-            app.extraPrefixes = preset.extraPrefixes
+        if let preset = MeetingApp.preset(for: app.bundleID) {
+            if app.extraPrefixes.isEmpty { app.extraPrefixes = preset.extraPrefixes }
+            app.attributesCamera = preset.attributesCamera
         }
         apps.append(app)
     }

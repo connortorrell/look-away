@@ -90,6 +90,34 @@ struct MeetingEvidenceTests {
         #expect(meetingEvidence(in: activity, settings: settings) == nil)
     }
 
+    /// A browser is playing something most of the day, so the camera cannot be
+    /// pinned on it — otherwise a YouTube tab plus Photo Booth would be a
+    /// "Google Chrome meeting".
+    @Test func cameraUseWithABrowserPlayingAudioIsNotAMeeting() {
+        let browsing = MeetingSettings(
+            isEnabled: true,
+            apps: [MeetingApp.preset(for: "us.zoom.xos")!, MeetingApp.preset(for: "com.google.Chrome")!]
+        )
+        let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper"], isCameraInUse: true)
+        #expect(meetingEvidence(in: activity, settings: browsing) == nil)
+    }
+
+    /// But a browser still counts for the microphone, where the process is named.
+    @Test func aBrowserHoldingTheMicrophoneIsStillAMeeting() {
+        let browsing = MeetingSettings(isEnabled: true, apps: [MeetingApp.preset(for: "com.google.Chrome")!])
+        let activity = MeetingActivity(capturingBundleIDs: ["com.google.Chrome.helper"])
+        #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Google Chrome")
+    }
+
+    @Test func cameraUseWithAMeetingAppAndABrowserPlayingIsPinnedOnTheMeetingApp() {
+        let browsing = MeetingSettings(
+            isEnabled: true,
+            apps: [MeetingApp.preset(for: "com.google.Chrome")!, MeetingApp.preset(for: "us.zoom.xos")!]
+        )
+        let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper", "us.zoom.caphost"], isCameraInUse: true)
+        #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Zoom")
+    }
+
     @Test func cameraCanBeIgnored() {
         var ignoring = settings
         ignoring.countsCamera = false
@@ -291,6 +319,24 @@ struct MeetingSettingsTests {
         // As the installed-apps list would offer it: bundle ID and name only.
         settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "zoom.us"))
         #expect(settings.apps[0].matches(processBundleID: "us.zoom.caphost"))
+    }
+
+    /// A browser picked from the installed list knows only its bundle ID and
+    /// name; the preset supplies the camera rule.
+    @Test func addingABrowserInheritsThePresetsCameraRule() {
+        var settings = MeetingSettings()
+        settings.add(MeetingApp(bundleID: "com.google.Chrome", name: "Google Chrome"))
+        settings.add(MeetingApp(bundleID: "com.acme.meet", name: "Acme Meet"))
+        #expect(!settings.apps[0].attributesCamera)
+        #expect(settings.apps[1].attributesCamera)
+    }
+
+    /// Apps saved before the camera rule existed have no key for it.
+    @Test func anAppSavedWithoutTheCameraRuleDecodesAsCounting() throws {
+        let saved = #"{"bundleID":"us.zoom.xos","name":"Zoom","extraPrefixes":["us.zoom."]}"#
+        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        #expect(app.attributesCamera)
+        #expect(app.extraPrefixes == ["us.zoom."])
     }
 
     @Test func appsAreNotAddedTwice() {

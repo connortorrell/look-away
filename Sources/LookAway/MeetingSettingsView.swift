@@ -92,9 +92,10 @@ struct MeetingSettingsView: View {
         Toggle(isOn: binding(\.countsCamera)) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Count camera use too").font(.subheadline.weight(.medium))
-                Text("Keeps you covered while muted but on video.")
+                Text("Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .toggleStyle(.switch)

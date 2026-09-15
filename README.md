@@ -79,7 +79,10 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   the audio devices, playing the call you are listening to. A chosen app merely
   being *open* is not enough, so Photo Booth — or anything else using the
   camera — is never mistaken for a meeting just because Zoom or a browser
-  happens to be running.
+  happens to be running. Browsers don't count for the camera at all, even
+  while playing audio: one is playing something most of the day, so a
+  website using the camera would otherwise read as a meeting. They still
+  count for the microphone, where the process is named.
 - **Count audio playing too** is off by default and best left that way. Audio
   coming *out* of an app is a weak signal — a YouTube video, a Slack ping and a
   call all look identical — and browsers and chat apps are in the list above,

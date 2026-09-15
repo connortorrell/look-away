@@ -69,10 +69,12 @@ public func meetingEvidence(
     // second signal on an app that is already playing the call's audio — being
     // muted on video still reads as a meeting. A chosen app merely being open
     // is not enough: that would make Photo Booth, or a camera-using app the
-    // user never chose, look like a meeting in any browser's company.
+    // user never chose, look like a meeting in any browser's company. Nor is a
+    // browser playing audio enough: one is playing something most of the day,
+    // so only apps that carry the camera rule can be credited.
     if settings.countsCamera, activity.isCameraInUse {
         for bundleID in activity.playingBundleIDs.sorted() {
-            if let app = settings.app(owning: bundleID) { return .camera(app: app) }
+            if let app = settings.cameraApp(owning: bundleID) { return .camera(app: app) }
         }
     }
 
