@@ -11,7 +11,7 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
 
     public var isEnabled: Bool
     /// The apps that count as a meeting, in the order the user added them.
-    public var apps: [MeetingApp]
+    public var apps: [ChosenApp]
     public var detectionDelay: TimeInterval
     /// How long the signal has to stay clear before reminders come back. Keeps
     /// a spell on mute, or a moment between two back-to-back calls, from
@@ -33,7 +33,7 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
 
     public init(
         isEnabled: Bool = false,
-        apps: [MeetingApp] = [],
+        apps: [ChosenApp] = [],
         detectionDelay: TimeInterval = 15,
         endGrace: TimeInterval = 30,
         countsCamera: Bool = true,
@@ -61,7 +61,7 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let standard = MeetingSettings()
         isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? standard.isEnabled
-        apps = try container.decodeIfPresent([MeetingApp].self, forKey: .apps) ?? standard.apps
+        apps = try container.decodeIfPresent([ChosenApp].self, forKey: .apps) ?? standard.apps
         detectionDelay = try container.decodeIfPresent(TimeInterval.self, forKey: .detectionDelay) ?? standard.detectionDelay
         endGrace = try container.decodeIfPresent(TimeInterval.self, forKey: .endGrace) ?? standard.endGrace
         countsCamera = try container.decodeIfPresent(Bool.self, forKey: .countsCamera) ?? standard.countsCamera
@@ -76,24 +76,24 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
     }
 
     /// Whether any chosen app owns `processBundleID`.
-    public func app(owning processBundleID: String) -> MeetingApp? {
+    public func app(owning processBundleID: String) -> ChosenApp? {
         apps.first { $0.matches(processBundleID: processBundleID) }
     }
 
     /// Like `app(owning:)`, but only among the apps camera use may be pinned on.
-    public func cameraApp(owning processBundleID: String) -> MeetingApp? {
+    public func cameraApp(owning processBundleID: String) -> ChosenApp? {
         apps.first { $0.attributesCamera && $0.matches(processBundleID: processBundleID) }
     }
 
     // MARK: - Editing
 
-    public mutating func add(_ app: MeetingApp) {
+    public mutating func add(_ app: ChosenApp) {
         guard !contains(app.bundleID) else { return }
         // Prefer the preset's knowledge: an app picked from the installed list
         // only knows its own bundle ID, and Zoom's capture process is a
         // sibling, and a browser should not be credited with camera use.
         var app = app
-        if let preset = MeetingApp.preset(for: app.bundleID) {
+        if let preset = ChosenApp.meetingPreset(for: app.bundleID) {
             if app.extraPrefixes.isEmpty { app.extraPrefixes = preset.extraPrefixes }
             app.attributesCamera = preset.attributesCamera
         }
@@ -110,7 +110,7 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
     public mutating func seedApps(installed: Set<String>) -> Bool {
         guard !hasSeededApps else { return false }
         hasSeededApps = true
-        let matched = MeetingApp.presets.filter { preset in
+        let matched = ChosenApp.meetingPresets.filter { preset in
             installed.contains { $0.caseInsensitiveCompare(preset.bundleID) == .orderedSame }
         }
         apps = matched

@@ -7,8 +7,8 @@ import SwiftUI
 @MainActor
 final class SettingsWindowController {
     private static let frameName = "Settings"
-    /// Tall enough to show both sections expanded; the height can be resized.
-    private static let openingHeight: CGFloat = 620
+    /// Tall enough to show the sections expanded; the height can be resized.
+    private static let openingHeight: CGFloat = 680
     private static let minimumHeight: CGFloat = 320
 
     private let model: AppModel
@@ -48,7 +48,7 @@ final class SettingsWindowController {
         window.styleMask = [.titled, .closable, .resizable]
         window.isReleasedWhenClosed = false
         // The panel scrolls, so it has no natural height to fit to. Open at a
-        // size that shows both sections expanded and let the height be resized.
+        // size that shows the sections expanded and let the height be resized.
         window.contentMinSize = NSSize(width: SettingsView.width, height: Self.minimumHeight)
         window.contentMaxSize = NSSize(width: SettingsView.width, height: .greatestFiniteMagnitude)
         window.setContentSize(NSSize(width: SettingsView.width, height: Self.openingHeight))

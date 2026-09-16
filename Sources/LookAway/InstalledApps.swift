@@ -7,15 +7,22 @@ struct InstalledApp: Identifiable, Hashable {
     let bundleID: String
     let name: String
     let url: URL
+    /// False for agents (`LSUIElement`) and faceless background processes
+    /// (`LSBackgroundOnly`). Neither has a menu bar of its own, and a window
+    /// from one — a menu bar utility's preferences — is not somewhere you
+    /// spend time, so they only lengthen the pause list. Still offered to the
+    /// meeting list: a helper with no window can hold the microphone.
+    let canBeFrontmost: Bool
 
     var id: String { bundleID }
 
-    var meetingApp: MeetingApp {
-        MeetingApp(bundleID: bundleID, name: name)
+    /// The app as one of the picker's chips.
+    var chosen: ChosenApp {
+        ChosenApp(bundleID: bundleID, name: name)
     }
 }
 
-/// The list of apps on this Mac, for the meeting-app picker.
+/// The list of apps on this Mac, for the app pickers in the settings panel.
 ///
 /// Scanned from the usual application folders rather than asked of Launch
 /// Services, because there is no API that just hands over "every installed
@@ -56,9 +63,14 @@ final class InstalledApps {
 
     /// Apps matching `query`, minus the ones already chosen. An empty query
     /// lists everything, which is what the field shows when it opens.
-    func matches(_ query: String, excluding chosen: MeetingSettings) -> [InstalledApp] {
+    /// `frontmostOnly` drops the apps that can never come to the front, for
+    /// the pause list.
+    func matches(_ query: String, excluding chosen: [ChosenApp], frontmostOnly: Bool = false) -> [InstalledApp] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        let available = all.filter { !chosen.contains($0.bundleID) }
+        let taken = Set(chosen.map { $0.bundleID.lowercased() })
+        let available = all.filter {
+            !taken.contains($0.bundleID.lowercased()) && (!frontmostOnly || $0.canBeFrontmost)
+        }
         guard !trimmed.isEmpty else { return available }
         return available
             .filter { $0.name.localizedCaseInsensitiveContains(trimmed) || $0.bundleID.localizedCaseInsensitiveContains(trimmed) }
@@ -114,7 +126,20 @@ final class InstalledApps {
         let name = (info["CFBundleDisplayName"] as? String)
             ?? (info["CFBundleName"] as? String)
             ?? url.deletingPathExtension().lastPathComponent
-        return InstalledApp(bundleID: bundleID, name: name, url: url)
+        // Not localized keys, so read straight off the bundle.
+        let isAgent = plistBool(bundle.object(forInfoDictionaryKey: "LSUIElement"))
+            || plistBool(bundle.object(forInfoDictionaryKey: "LSBackgroundOnly"))
+        return InstalledApp(bundleID: bundleID, name: name, url: url, canBeFrontmost: !isAgent)
+    }
+
+    /// Info.plist booleans arrive as `<true/>`, `<integer>1</integer>` or, in
+    /// older bundles, `<string>1</string>`.
+    private nonisolated static func plistBool(_ value: Any?) -> Bool {
+        switch value {
+        case let flag as Bool: return flag
+        case let text as String: return ["1", "yes", "true"].contains(text.lowercased())
+        default: return false
+        }
     }
 }
 

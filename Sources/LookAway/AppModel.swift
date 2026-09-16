@@ -22,6 +22,11 @@ final class AppModel {
     /// The meeting the monitor currently sees, if any. Stored rather than
     /// computed so SwiftUI can watch it; the monitor itself is not observable.
     private(set) var meetingInProgress: MeetingEvidence?
+    /// And for the list of apps that pause reminders on their own.
+    private(set) var appPauseSettings: AppPauseSettings
+    /// The chosen app the monitor currently sees in front, if any. Stored for
+    /// the same reason as `meetingInProgress`.
+    private(set) var appInFront: ChosenApp?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -29,43 +34,60 @@ final class AppModel {
     private let clock: Timekeeper
     private let scheduleStore: ScheduleStoring
     private let meetingStore: MeetingSettingsStoring
+    private let appPauseStore: AppPauseSettingsStoring
     private let meetings: MeetingMonitor
+    private let focusedApps: FocusedAppMonitor
     private var panel: BreakPanelController?
     private var doneHide: ScheduledTask?
 
     init(
         config: Config = .standard,
         scheduleStore: ScheduleStoring = UserDefaultsScheduleStore(),
-        meetingStore: MeetingSettingsStoring = UserDefaultsMeetingSettingsStore()
+        meetingStore: MeetingSettingsStoring = UserDefaultsMeetingSettingsStore(),
+        appPauseStore: AppPauseSettingsStoring = UserDefaultsAppPauseSettingsStore()
     ) {
         self.config = config
         self.scheduleStore = scheduleStore
         self.meetingStore = meetingStore
+        self.appPauseStore = appPauseStore
         let clock = SystemTimekeeper()
         self.clock = clock
         let schedule = scheduleStore.load()
         self.schedule = schedule
         let meetingSettings = meetingStore.load()
         self.meetingSettings = meetingSettings
+        let appPauseSettings = appPauseStore.load()
+        self.appPauseSettings = appPauseSettings
         scheduler = BreakScheduler(config: config, schedule: schedule, clock: clock)
         meetings = MeetingMonitor(
             settings: meetingSettings,
             probe: SystemActivityProbe(),
             clock: clock
         )
+        focusedApps = FocusedAppMonitor(
+            settings: appPauseSettings,
+            probe: WorkspaceFrontmostAppProbe(),
+            clock: clock,
+            ownBundleID: Bundle.main.bundleIdentifier
+        )
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
         meetings.onChange = { [unowned self] isInMeeting in
-            isInMeeting ? self.scheduler.meetingDidStart() : self.scheduler.meetingDidEnd()
+            isInMeeting ? self.scheduler.hold(.meeting) : self.scheduler.release(.meeting)
             // A hold or release the scheduler makes emits an event, which
             // refreshes the display; paused or off-schedule it makes neither,
             // so the panel's status is refreshed here as well.
             self.refreshMeetingStatus()
+        }
+        focusedApps.onChange = { [unowned self] isInPausingApp in
+            isInPausingApp ? self.scheduler.hold(.app) : self.scheduler.release(.app)
+            self.refreshAppStatus()
         }
     }
 
     func start() {
         scheduler.start()
         meetings.start()
+        focusedApps.start()
     }
 
     // MARK: User actions
@@ -77,12 +99,14 @@ final class AppModel {
     func systemDidSuspend() {
         scheduler.systemDidSuspend()
         meetings.systemDidSuspend()
+        focusedApps.systemDidSuspend()
     }
 
-    /// The monitor goes first so the scheduler re-arms knowing whether a call
-    /// is on right now, not what was on before the Mac slept.
+    /// The monitors go first so the scheduler re-arms knowing what is on right
+    /// now — a call, a chosen app in front — not what was before the Mac slept.
     func systemDidResume() {
         meetings.systemDidResume()
+        focusedApps.systemDidResume()
         scheduler.systemDidResume()
     }
     func clockDidChange() { scheduler.clockDidChange() }
@@ -109,6 +133,17 @@ final class AppModel {
         meetings.apply(settings: settings)
     }
 
+    /// Single write path for the pause list, mirroring `updateMeetingSettings`:
+    /// the monitor re-reads at once, and an edit that takes its hold away —
+    /// switching off, or dropping the app you are in — reports the end
+    /// through `onChange`.
+    func updateAppPauseSettings(_ settings: AppPauseSettings) {
+        guard settings != appPauseSettings else { return }
+        appPauseSettings = settings
+        appPauseStore.save(settings)
+        focusedApps.apply(settings: settings)
+    }
+
     /// Called when the settings panel opens. Fills an untouched app list with
     /// the meeting apps actually installed, so switching the feature on does
     /// something sensible without the user picking anything first.
@@ -119,6 +154,13 @@ final class AppModel {
             guard seeded.seedApps(installed: Set(installed.map(\.bundleID))) else { return }
             updateMeetingSettings(seeded)
         }
+    }
+
+    /// Called when the settings panel opens. The pause list has nothing to
+    /// seed, but its search field still needs the installed-apps scan under
+    /// way, and the panel can be opened with the meeting section switched off.
+    func loadInstalledApps() {
+        Task { await installedApps.load() }
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
@@ -158,11 +200,17 @@ final class AppModel {
         }
         refreshIcon()
         refreshMeetingStatus()
+        refreshAppStatus()
     }
 
     private func refreshMeetingStatus() {
         let current = meetings.isInMeeting ? meetings.evidence : nil
         if current != meetingInProgress { meetingInProgress = current }
+    }
+
+    private func refreshAppStatus() {
+        let current = focusedApps.isInPausingApp ? focusedApps.app : nil
+        if current != appInFront { appInFront = current }
     }
 
     private func showPanel() {
@@ -206,11 +254,11 @@ final class AppModel {
             // `until` is only nil when no day is switched on.
             guard let until else { return "No days scheduled" }
             return "Outside schedule — back \(Self.formatOpening(until, from: clock.now()))"
-        case .inMeeting(let dueAt):
-            let lead = meetings.evidence.map { "\($0.app.name) meeting" } ?? "In a meeting"
+        case .held(let dueAt, let reason):
+            let lead = Self.lead(for: reason, meeting: meetingInProgress?.app, app: focusedApps.app)
             let remaining = dueAt.timeIntervalSince(clock.now())
-            // The countdown keeps running on a call, so it can already be owed.
-            guard remaining > 0 else { return "\(lead) — break when you're free" }
+            // The countdown keeps running through a hold, so it can already be owed.
+            guard remaining > 0 else { return "\(lead) — \(Self.owed(for: reason))" }
             return "\(lead) — next break in \(Self.format(remaining))"
         }
     }
@@ -221,10 +269,31 @@ final class AppModel {
         case .breaking: icon = "eye.slash"
         case .paused: icon = "pause.circle"
         case .offSchedule: icon = "moon.zzz"
-        case .inMeeting: icon = "video"
+        case .held(_, .meeting): icon = "video"
+        case .held(_, .app): icon = "macwindow"
         case .stopped, .idle, .snoozed: icon = "eye"
         }
         if icon != iconName { iconName = icon }
+    }
+
+    /// What the menu leads with while a hold is on. Naming the app is the
+    /// point; the fallbacks are only reached when detection lost track of
+    /// which app it was.
+    private static func lead(for reason: BreakScheduler.HoldReason, meeting: ChosenApp?, app: ChosenApp?) -> String {
+        switch reason {
+        case .meeting:
+            return meeting.map { "\($0.name) meeting" } ?? "In a meeting"
+        case .app:
+            return app.map { "In \($0.name)" } ?? "In a chosen app"
+        }
+    }
+
+    /// How the menu puts a break that is already owed and waiting on the hold.
+    private static func owed(for reason: BreakScheduler.HoldReason) -> String {
+        switch reason {
+        case .meeting: return "break when you're free"
+        case .app: return "break when you're done"
+        }
     }
 
     /// "at 9:00 AM" for later today, "Mon at 9:00 AM" within the week, and

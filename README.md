@@ -23,8 +23,9 @@ time, look at something 20 feet away for 20 seconds.
 - The next 20-minute interval starts when the panel closes (finished or
   declined), never from a snooze.
 - Sleep or screen lock pauses everything; wake or unlock starts a fresh
-  20 minutes. Meetings hold the popup too, if you switch that on — but the
-  20 minutes keeps counting (see below).
+- Sleep or screen lock pauses everything; wake or unlock starts a fresh
+  20 minutes. Meetings and the apps you name hold the popup too, if you switch
+  those on — but the 20 minutes keeps counting (see below).
 - Menu: live "Next break in m:ss", Pause / Resume Reminders, Take a Break Now,
   Launch at Login, Settings, Quit.
 
@@ -143,6 +144,54 @@ patterns that belong to it. Chromium browsers are matched through their helper;
 Safari hands capture to a shared WebKit process that doesn't say which browser
 it came from, so that one entry covers any WebKit browser.
 
+## Apps
+
+A meeting is not the only thing worth not being interrupted during, and the
+microphone is not the only way to tell. A full-screen game holds no devices at
+all, so the meeting check above can never see it. This list can: name an app,
+and reminders are held back for as long as it is the app you are in.
+
+Opt-in like the rest. Leave **Pause reminders in certain apps** off and nothing
+is watched.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/settings-apps-dark.png">
+    <img src="docs/settings-apps-light.png" alt="Look Away settings panel with the schedule and meeting detection off and the app pause list on: chips for Minecraft and Steam over a search field, a footnote about the 5-second settle and 20-second grace, and a last line reading Not in a chosen app right now" width="470">
+  </picture>
+</p>
+
+- **Apps that pause reminders** is the same chips-over-a-search-field control as
+  the meeting list, over the same list of every app installed on the Mac. It
+  starts empty and stays that way until you put something in it: which apps
+  should not be interrupted is personal, and there is no sensible list to guess
+  from.
+- **Only the app in front counts.** An app merely being open does nothing —
+  leaving a game running in the background all week would otherwise switch
+  reminders off all week. Nothing is asked of the microphone or the camera, so
+  this adds no permission prompt of any kind.
+- Switching in has to settle for 5 seconds before it counts, so clicking
+  through a window to reach something behind it holds nothing. Leaving has a
+  20-second grace period, so alt-tabbing out to look something up and straight
+  back does not land a popup on the way in.
+- Editing the list is acted on at once rather than waiting out the grace
+  period: taking the app you are in back off the list releases immediately.
+  Look Away's own windows never count as leaving, so opening this panel
+  mid-game does not end the hold. At launch the app already in front counts
+  straight away.
+- **The 20 minutes keeps running**, exactly as it does through a meeting. A
+  break that came due mid-session opens when you leave the app, and a session
+  shorter than the time left just carries on counting. It is one break either
+  way, not a queue of them.
+- While a hold is on the menu bar shows a window icon and the menu reads
+  "In Minecraft — next break in 4:32", or "break when you're done" once it is
+  already due. **Take a Break Now** still works, and pausing from the menu
+  still outranks detection.
+
+Both lists can hold at once — a call taken with a game still up — and the popup
+waits for the last of them to lift. The menu names the meeting while there is
+one, since that is the hold with an end somebody else decides.
+
 ## Install
 
 There is no prebuilt download. You build the app yourself, which takes about a
@@ -198,10 +247,15 @@ to the Trash. If Launch at Login was on, macOS removes the login item with it.
 ## Layout
 
 - `Sources/LookAwayCore` — pure Foundation: `Config`, the `Timekeeper` clock
-  abstraction, the `Schedule` and `MeetingSettings` models and their storage,
-  the `MeetingMonitor` debounce, and the `BreakScheduler` state machine.
+  abstraction, the `Schedule`, `MeetingSettings` and `AppPauseSettings` models
+  and their storage, the `MeetingMonitor` and `FocusedAppMonitor` detectors
+  on one shared `DebouncedMonitor`, and the `BreakScheduler` state machine.
+  Both detectors report to the same hold on the scheduler, which keeps the
+  popup back until the last one lifts.
 - `Sources/LookAway` — AppKit/SwiftUI shell: menu bar item, floating panel,
-  break view, settings panel, the CoreAudio/CoreMediaIO activity probe and the
-  installed-apps scan, sleep/lock observers, launch-at-login.
-- `Tests/LookAwayCoreTests` — scheduler, schedule and meeting-detection tests,
-  driven by a fake clock and a fake device probe.
+  break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
+  frontmost-app probe and the installed-apps scan, sleep/lock observers,
+  launch-at-login.
+- `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection and
+  app-detection tests, driven by a fake clock, a fake device probe and a fake
+  frontmost-app probe.

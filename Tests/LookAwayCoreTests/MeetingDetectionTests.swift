@@ -15,9 +15,9 @@ final class FakeActivityProbe: MeetingActivityProbing {
 }
 
 @MainActor
-struct MeetingAppMatchingTests {
-    let zoom = MeetingApp.preset(for: "us.zoom.xos")!
-    let pop = MeetingApp(bundleID: "com.pop.pop.app", name: "Pop")
+struct ChosenAppMatchingTests {
+    let zoom = ChosenApp.meetingPreset(for: "us.zoom.xos")!
+    let pop = ChosenApp(bundleID: "com.pop.pop.app", name: "Pop")
 
     @Test func matchesTheAppItself() {
         #expect(zoom.matches(processBundleID: "us.zoom.xos"))
@@ -39,12 +39,12 @@ struct MeetingAppMatchingTests {
     /// FaceTime.app never touches the microphone itself; the system's call
     /// daemon does, for FaceTime and for iPhone calls taken on the Mac.
     @Test func matchesFaceTimesCallDaemon() {
-        let facetime = MeetingApp.preset(for: "com.apple.FaceTime")!
+        let facetime = ChosenApp.meetingPreset(for: "com.apple.FaceTime")!
         #expect(facetime.matches(processBundleID: "com.apple.avconferenced"))
     }
 
     @Test func matchesRegardlessOfCase() {
-        let arc = MeetingApp(bundleID: "company.thebrowser.Browser", name: "Arc")
+        let arc = ChosenApp(bundleID: "company.thebrowser.Browser", name: "Arc")
         #expect(arc.matches(processBundleID: "company.thebrowser.browser.helper"))
     }
 
@@ -59,7 +59,7 @@ struct MeetingAppMatchingTests {
             ("com.apple.Safari", "com.apple.WebKit.GPU"),
         ]
         for (bundleID, process) in captures {
-            let browser = MeetingApp.preset(for: bundleID)
+            let browser = ChosenApp.meetingPreset(for: bundleID)
             #expect(browser?.matches(processBundleID: process) == true, "\(bundleID) should own \(process)")
             #expect(browser?.attributesCamera == false, "\(bundleID) should not be credited with camera use")
         }
@@ -68,14 +68,14 @@ struct MeetingAppMatchingTests {
     @Test func doesNotMatchAnUnrelatedApp() {
         #expect(!pop.matches(processBundleID: "com.spotify.client"))
         // A shared prefix that is not a bundle-ID boundary must not match.
-        #expect(!MeetingApp(bundleID: "com.foo", name: "Foo").matches(processBundleID: "com.foobar"))
+        #expect(!ChosenApp(bundleID: "com.foo", name: "Foo").matches(processBundleID: "com.foobar"))
     }
 }
 
 @MainActor
 struct MeetingEvidenceTests {
     private var settings: MeetingSettings {
-        MeetingSettings(isEnabled: true, apps: [MeetingApp.preset(for: "us.zoom.xos")!])
+        MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPreset(for: "us.zoom.xos")!])
     }
 
     @Test func microphoneUseByAChosenAppIsAMeeting() {
@@ -120,7 +120,7 @@ struct MeetingEvidenceTests {
     @Test func cameraUseWithABrowserPlayingAudioIsNotAMeeting() {
         let browsing = MeetingSettings(
             isEnabled: true,
-            apps: [MeetingApp.preset(for: "us.zoom.xos")!, MeetingApp.preset(for: "com.google.Chrome")!]
+            apps: [ChosenApp.meetingPreset(for: "us.zoom.xos")!, ChosenApp.meetingPreset(for: "com.google.Chrome")!]
         )
         let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper"], isCameraInUse: true)
         #expect(meetingEvidence(in: activity, settings: browsing) == nil)
@@ -128,15 +128,15 @@ struct MeetingEvidenceTests {
 
     /// But a browser still counts for the microphone, where the process is named.
     @Test func aBrowserHoldingTheMicrophoneIsStillAMeeting() {
-        let browsing = MeetingSettings(isEnabled: true, apps: [MeetingApp.preset(for: "com.google.Chrome")!])
+        let browsing = MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPreset(for: "com.google.Chrome")!])
         let activity = MeetingActivity(capturingBundleIDs: ["com.google.Chrome.helper"])
         #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Google Chrome")
     }
 
-    @Test func cameraUseWithAMeetingAppAndABrowserPlayingIsPinnedOnTheMeetingApp() {
+    @Test func cameraUseWithAMeetingAppAndABrowserPlayingIsPinnedOnTheChosenApp() {
         let browsing = MeetingSettings(
             isEnabled: true,
-            apps: [MeetingApp.preset(for: "com.google.Chrome")!, MeetingApp.preset(for: "us.zoom.xos")!]
+            apps: [ChosenApp.meetingPreset(for: "com.google.Chrome")!, ChosenApp.meetingPreset(for: "us.zoom.xos")!]
         )
         let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper", "us.zoom.caphost"], isCameraInUse: true)
         #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Zoom")
@@ -198,7 +198,7 @@ struct MeetingEvidenceTests {
 struct MeetingMonitorTests {
     let clock = FakeTimekeeper()
     let probe = FakeActivityProbe()
-    let zoom = MeetingApp.preset(for: "us.zoom.xos")!
+    let zoom = ChosenApp.meetingPreset(for: "us.zoom.xos")!
 
     private func makeMonitor(delay: TimeInterval = 15, grace: TimeInterval = 30) -> MeetingMonitor {
         let settings = MeetingSettings(
@@ -344,7 +344,7 @@ struct MeetingMonitorTests {
         clock.advance(by: 20)
         #expect(monitor.isInMeeting)
 
-        let slack = MeetingApp.preset(for: "com.tinyspeck.slackmacgap")!
+        let slack = ChosenApp.meetingPreset(for: "com.tinyspeck.slackmacgap")!
         monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [slack], detectionDelay: 15))
         #expect(!monitor.isInMeeting)
     }
@@ -406,7 +406,7 @@ struct MeetingSettingsTests {
     @Test func addingAnAppInheritsThePresetsProcessPrefixes() {
         var settings = MeetingSettings()
         // As the installed-apps list would offer it: bundle ID and name only.
-        settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "zoom.us"))
+        settings.add(ChosenApp(bundleID: "us.zoom.xos", name: "zoom.us"))
         #expect(settings.apps[0].matches(processBundleID: "us.zoom.caphost"))
     }
 
@@ -414,8 +414,8 @@ struct MeetingSettingsTests {
     /// name; the preset supplies the camera rule.
     @Test func addingABrowserInheritsThePresetsCameraRule() {
         var settings = MeetingSettings()
-        settings.add(MeetingApp(bundleID: "com.google.Chrome", name: "Google Chrome"))
-        settings.add(MeetingApp(bundleID: "com.acme.meet", name: "Acme Meet"))
+        settings.add(ChosenApp(bundleID: "com.google.Chrome", name: "Google Chrome"))
+        settings.add(ChosenApp(bundleID: "com.acme.meet", name: "Acme Meet"))
         #expect(!settings.apps[0].attributesCamera)
         #expect(settings.apps[1].attributesCamera)
     }
@@ -423,7 +423,7 @@ struct MeetingSettingsTests {
     /// Apps saved before the camera rule existed have no key for it.
     @Test func anAppSavedWithoutTheCameraRuleDecodesAsCounting() throws {
         let saved = #"{"bundleID":"us.zoom.xos","name":"Zoom","extraPrefixes":["us.zoom."]}"#
-        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        let app = try JSONDecoder().decode(ChosenApp.self, from: Data(saved.utf8))
         #expect(app.attributesCamera)
         #expect(app.extraPrefixes == ["us.zoom."])
     }
@@ -433,23 +433,23 @@ struct MeetingSettingsTests {
     /// reaches installs that already have the app chosen.
     @Test func anAppSavedWithoutPrefixesPicksUpThePresetsOnLoad() throws {
         let saved = #"{"bundleID":"com.apple.FaceTime","name":"FaceTime","extraPrefixes":[]}"#
-        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        let app = try JSONDecoder().decode(ChosenApp.self, from: Data(saved.utf8))
         #expect(app.matches(processBundleID: "com.apple.avconferenced"))
 
         // An app with no preset keeps its empty list; nothing is invented.
         let unknown = #"{"bundleID":"com.acme.meet","name":"Acme Meet"}"#
-        #expect(try JSONDecoder().decode(MeetingApp.self, from: Data(unknown.utf8)).extraPrefixes.isEmpty)
+        #expect(try JSONDecoder().decode(ChosenApp.self, from: Data(unknown.utf8)).extraPrefixes.isEmpty)
     }
 
     @Test func appsAreNotAddedTwice() {
         var settings = MeetingSettings()
-        settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "Zoom"))
-        settings.add(MeetingApp(bundleID: "US.ZOOM.XOS", name: "Zoom"))
+        settings.add(ChosenApp(bundleID: "us.zoom.xos", name: "Zoom"))
+        settings.add(ChosenApp(bundleID: "US.ZOOM.XOS", name: "Zoom"))
         #expect(settings.apps.count == 1)
     }
 
     @Test func removingAnAppIsCaseInsensitive() {
-        var settings = MeetingSettings(isEnabled: true, apps: [MeetingApp(bundleID: "us.zoom.xos", name: "Zoom")])
+        var settings = MeetingSettings(isEnabled: true, apps: [ChosenApp(bundleID: "us.zoom.xos", name: "Zoom")])
         settings.remove("US.ZOOM.XOS")
         #expect(settings.apps.isEmpty)
     }
@@ -474,7 +474,7 @@ struct MeetingSettingsTests {
     }
 
     @Test func settingsSurviveARoundTrip() throws {
-        var original = MeetingSettings(isEnabled: true, apps: [MeetingApp.presets[0]])
+        var original = MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPresets[0]])
         original.countsAudioOutput = true
         let decoded = try JSONDecoder().decode(
             MeetingSettings.self,
