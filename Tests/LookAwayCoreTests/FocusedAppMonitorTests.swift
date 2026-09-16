@@ -194,6 +194,24 @@ struct FocusedAppMonitorTests {
         #expect(monitor.app == nil)
     }
 
+    /// Waking reads the app in front as it is, like a start: a game quit
+    /// while the Mac slept does not get a grace period on wake, and one still
+    /// up holds again at once.
+    @Test func wakingReadsTheFrontAppAtOnce() {
+        let monitor = makeMonitor()
+        probe.bundleID = minecraft.bundleID
+        monitor.start()
+        #expect(monitor.isInPausingApp)
+
+        monitor.systemDidSuspend()
+        probe.bundleID = "com.apple.finder"
+        clock.advance(by: 600)
+        #expect(monitor.isInPausingApp) // nothing polled while asleep
+
+        monitor.systemDidResume()
+        #expect(!monitor.isInPausingApp)
+    }
+
     // MARK: Our own windows
 
     /// The settings panel activates Look Away, so it is in front for as long as

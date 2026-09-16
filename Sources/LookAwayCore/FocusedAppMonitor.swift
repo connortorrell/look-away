@@ -30,11 +30,14 @@ public final class FocusedAppMonitor {
     /// short enough that the delay and grace periods land accurately.
     public static let pollInterval: TimeInterval = 2
 
-    public private(set) var isInPausingApp = false
+    public var isInPausingApp: Bool { core.isActive }
     /// Which app is holding reminders back, for the menu to name.
-    public private(set) var app: ChosenApp?
+    public var app: ChosenApp? { core.reading }
     /// Called only when `isInPausingApp` actually flips.
-    public var onChange: (@MainActor (Bool) -> Void)?
+    public var onChange: (@MainActor (Bool) -> Void)? {
+        get { core.onChange }
+        set { core.onChange = newValue }
+    }
 
     private var settings: AppPauseSettings
     private let probe: FrontmostAppProbing
@@ -43,9 +46,14 @@ public final class FocusedAppMonitor {
     /// the app the user is really in — the settings window activates us — so
     /// those readings are skipped rather than counted as leaving.
     private let ownBundleID: String?
-    private var poll: ScheduledTask?
-    /// When the current run of "in the app" / "out of it" began.
-    private var pendingSince: Date?
+    private lazy var core = DebouncedMonitor<ChosenApp>(
+        pollInterval: Self.pollInterval,
+        clock: clock,
+        sample: { [unowned self] in self.sample() },
+        delay: { entering in
+            entering ? AppPauseSettings.settleDelay : AppPauseSettings.leaveGrace
+        }
+    )
 
     public init(
         settings: AppPauseSettings = .standard,
@@ -61,94 +69,54 @@ public final class FocusedAppMonitor {
 
     /// Begin watching, if the feature is on and something is chosen.
     ///
-    /// The first reading is taken at its word: switching the feature on while
-    /// already in the app is the user answering the question themselves, and
-    /// there is nothing to settle.
+    /// The first reading is taken at its word: at launch the app already in
+    /// front is where the user is, and there is nothing to settle.
     public func start() {
-        stopPolling()
         guard settings.isWatching else {
-            clearPause()
+            core.stop()
             return
         }
-        check(debounced: false)
-        schedulePoll()
+        core.start()
     }
 
     public func stop() {
-        stopPolling()
-        clearPause()
+        core.stop()
     }
 
     /// Adopt edited settings and re-evaluate straight away. Removing the app
     /// you are in releases the hold on the spot rather than after the grace
-    /// period, since the edit already answered the question.
+    /// period, since the edit has already answered the question.
     public func apply(settings: AppPauseSettings) {
         guard settings != self.settings else { return }
         self.settings = settings
-        pendingSince = nil
         // The re-read in `start()` is most likely looking at our own settings
         // window, which says nothing about the app we were holding for. The
         // edit does: off the list means the hold is over.
-        if let app, settings.app(inFront: app.bundleID) == nil { clearPause() }
+        if let app, settings.app(inFront: app.bundleID) == nil { core.stop() }
         start()
     }
 
-    // MARK: - Polling
-
-    private func schedulePoll() {
-        poll = clock.schedule(after: Self.pollInterval) { [weak self] in
-            guard let self else { return }
-            self.check(debounced: true)
-            self.schedulePoll()
-        }
+    /// The Mac is going to sleep or the screen is locking. Nothing is polled
+    /// until it comes back; what was known stands until then.
+    public func systemDidSuspend() {
+        core.suspend()
     }
 
-    private func stopPolling() {
-        poll?.cancel()
-        poll = nil
+    /// Woke or unlocked. The app in front may be anything by now, so the
+    /// current reading is taken as it is, like a start, rather than waiting
+    /// out a grace period for a game that was quit hours ago.
+    public func systemDidResume() {
+        start()
     }
 
-    /// One reading, turned into an enter or a leave. A polled reading has to
-    /// hold for the settle or grace period first; a reading taken because the
-    /// settings changed is acted on at once.
-    private func check(debounced: Bool) {
+    private func sample() -> DebouncedMonitor<ChosenApp>.Sample {
         let frontmost = probe.frontmostBundleID()
         // Our own windows are how the user talks to us, not somewhere they
-        // went. Neither starts, extends nor breaks a run.
+        // went.
         if let frontmost, let ownBundleID,
            frontmost.caseInsensitiveCompare(ownBundleID) == .orderedSame {
-            return
+            return .disregarded
         }
-        let found = settings.app(inFront: frontmost)
-        let isInApp = found != nil
-        guard isInApp != isInPausingApp else {
-            // The reading agrees with where we are; drop any part-run and keep
-            // the name current, since two chosen apps can follow each other
-            // without ever passing through a state change.
-            pendingSince = nil
-            if let found { app = found }
-            return
-        }
-
-        let now = clock.now()
-        let since = pendingSince ?? now
-        pendingSince = since
-        if debounced {
-            let required = isInApp ? AppPauseSettings.settleDelay : AppPauseSettings.leaveGrace
-            guard now.timeIntervalSince(since) >= required else { return }
-        }
-
-        pendingSince = nil
-        isInPausingApp = isInApp
-        app = found
-        onChange?(isInApp)
-    }
-
-    private func clearPause() {
-        pendingSince = nil
-        app = nil
-        guard isInPausingApp else { return }
-        isInPausingApp = false
-        onChange?(false)
+        return .init(settings.app(inFront: frontmost))
     }
 }

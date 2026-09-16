@@ -102,17 +102,27 @@ public final class MeetingMonitor {
     /// short enough that the delay and grace periods land accurately.
     public static let pollInterval: TimeInterval = 2
 
-    public private(set) var isInMeeting = false
-    public private(set) var evidence: MeetingEvidence?
+    public var isInMeeting: Bool { core.isActive }
+    public var evidence: MeetingEvidence? { core.reading }
     /// Called only when `isInMeeting` actually flips.
-    public var onChange: (@MainActor (Bool) -> Void)?
+    public var onChange: (@MainActor (Bool) -> Void)? {
+        get { core.onChange }
+        set { core.onChange = newValue }
+    }
 
     private var settings: MeetingSettings
     private let probe: MeetingActivityProbing
     private let clock: Timekeeper
-    private var poll: ScheduledTask?
-    /// When the current run of "looks like a meeting" / "looks clear" began.
-    private var pendingSince: Date?
+    private lazy var core = DebouncedMonitor<MeetingEvidence>(
+        pollInterval: Self.pollInterval,
+        clock: clock,
+        sample: { [unowned self] in
+            .init(meetingEvidence(in: self.probe.sample(), settings: self.settings))
+        },
+        delay: { [unowned self] entering in
+            entering ? self.settings.detectionDelay : self.settings.endGrace
+        }
+    )
 
     public init(
         settings: MeetingSettings = .standard,
@@ -129,89 +139,34 @@ public final class MeetingMonitor {
     /// straight away rather than after the detection delay, and a hold left
     /// over from before is released at once if nothing is on.
     public func start() {
-        stopPolling()
         guard settings.isEnabled, !settings.apps.isEmpty else {
-            clearMeeting()
+            core.stop()
             return
         }
-        check(debounced: false)
-        schedulePoll()
+        core.start()
     }
 
     public func stop() {
-        stopPolling()
-        clearMeeting()
+        core.stop()
     }
 
     /// Adopt edited settings and re-evaluate straight away.
     public func apply(settings: MeetingSettings) {
         guard settings != self.settings else { return }
         self.settings = settings
-        pendingSince = nil
         start()
     }
 
     /// The Mac is going to sleep or the screen is locking. Nothing is polled
     /// until it comes back; what was known stands until then.
     public func systemDidSuspend() {
-        stopPolling()
+        core.suspend()
     }
 
     /// Woke or unlocked. Whatever the debounce had been building towards is
     /// stale — the call may have ended hours ago, or begun on the phone and
     /// moved over — so the current reading is taken as it is, like a start.
     public func systemDidResume() {
-        pendingSince = nil
         start()
-    }
-
-    // MARK: - Polling
-
-    private func schedulePoll() {
-        poll = clock.schedule(after: Self.pollInterval) { [weak self] in
-            guard let self else { return }
-            self.check(debounced: true)
-            self.schedulePoll()
-        }
-    }
-
-    private func stopPolling() {
-        poll?.cancel()
-        poll = nil
-    }
-
-    /// One reading. Debounced, a change has to hold for the detection delay or
-    /// the end grace before it counts; undebounced, it counts at once.
-    private func check(debounced: Bool) {
-        let found = meetingEvidence(in: probe.sample(), settings: settings)
-        let looksLikeMeeting = found != nil
-        guard looksLikeMeeting != isInMeeting else {
-            // The reading agrees with where we are; drop any part-run and keep
-            // the evidence current so the menu can name the right app.
-            pendingSince = nil
-            if let found { evidence = found }
-            return
-        }
-
-        if debounced {
-            let now = clock.now()
-            let since = pendingSince ?? now
-            pendingSince = since
-            let required = looksLikeMeeting ? settings.detectionDelay : settings.endGrace
-            guard now.timeIntervalSince(since) >= required else { return }
-        }
-
-        pendingSince = nil
-        isInMeeting = looksLikeMeeting
-        evidence = found
-        onChange?(looksLikeMeeting)
-    }
-
-    private func clearMeeting() {
-        pendingSince = nil
-        evidence = nil
-        guard isInMeeting else { return }
-        isInMeeting = false
-        onChange?(false)
     }
 }

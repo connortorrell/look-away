@@ -95,12 +95,14 @@ final class AppModel {
     func systemDidSuspend() {
         scheduler.systemDidSuspend()
         meetings.systemDidSuspend()
+        focusedApps.systemDidSuspend()
     }
 
-    /// The monitor goes first so the scheduler re-arms knowing whether a call
-    /// is on right now, not what was on before the Mac slept.
+    /// The monitors go first so the scheduler re-arms knowing what is on right
+    /// now — a call, a chosen app in front — not what was before the Mac slept.
     func systemDidResume() {
         meetings.systemDidResume()
+        focusedApps.systemDidResume()
         scheduler.systemDidResume()
     }
     func clockDidChange() { scheduler.clockDidChange() }
