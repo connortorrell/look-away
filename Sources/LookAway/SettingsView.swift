@@ -12,6 +12,9 @@ struct SettingsView: View {
     let model: AppModel
     @State private var isCustomizingDays: Bool
 
+    /// The sections that can be switched on, and so can open below the fold.
+    private enum PanelSection: Hashable { case meetings, apps }
+
     /// Opens with the per-day list showing whenever there is something in it.
     init(model: AppModel) {
         self.model = model
@@ -19,20 +22,44 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                scheduleSection
-                Divider().padding(.vertical, 20)
-                MeetingSettingsView(model: model)
-                Divider().padding(.vertical, 20)
-                AppPauseSettingsView(model: model)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    scheduleSection
+                    Divider().padding(.vertical, 20)
+                    MeetingSettingsView(model: model)
+                        .id(PanelSection.meetings)
+                    Divider().padding(.vertical, 20)
+                    AppPauseSettingsView(model: model)
+                        .id(PanelSection.apps)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // A section switched on opens its controls below its toggle, which
+            // with the sections above it also open is below the fold.
+            .onChange(of: model.meetingSettings.isEnabled) { _, isOn in
+                if isOn { reveal(.meetings, in: proxy) }
+            }
+            .onChange(of: model.appPauseSettings.isEnabled) { _, isOn in
+                if isOn { reveal(.apps, in: proxy) }
+            }
+            .animation(.snappy(duration: 0.2), value: schedule.isEnabled)
+            .animation(.snappy(duration: 0.2), value: isCustomizingDays)
+            .animation(.snappy(duration: 0.2), value: schedule.activeDays)
         }
-        .animation(.snappy(duration: 0.2), value: schedule.isEnabled)
-        .animation(.snappy(duration: 0.2), value: isCustomizingDays)
-        .animation(.snappy(duration: 0.2), value: schedule.activeDays)
+    }
+
+    /// Scrolls a section into view once it has expanded. The change handler
+    /// runs before the section has laid out its new height, so a scroll made
+    /// there measures the collapsed section and lands short; the next turn of
+    /// the run loop sees the real frame.
+    private func reveal(_ section: PanelSection, in proxy: ScrollViewProxy) {
+        DispatchQueue.main.async {
+            withAnimation(.snappy(duration: 0.2)) {
+                proxy.scrollTo(section, anchor: .bottom)
+            }
+        }
     }
 
     /// Schedule editor. Everything below the opt-in toggle stays hidden until
