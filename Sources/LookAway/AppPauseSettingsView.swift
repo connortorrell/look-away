@@ -71,7 +71,7 @@ struct AppPauseSettingsView: View {
     private var settings: AppPauseSettings { model.appPauseSettings }
 
     private var results: [InstalledApp] {
-        model.installedApps.matches(query, excluding: settings.apps)
+        model.installedApps.matches(query, excluding: settings.apps, frontmostOnly: true)
     }
 
     private var appsFootnote: String {
