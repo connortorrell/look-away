@@ -24,6 +24,9 @@ final class AppModel {
     private(set) var meetingInProgress: MeetingEvidence?
     /// And for the list of apps that pause reminders on their own.
     private(set) var appPauseSettings: AppPauseSettings
+    /// The chosen app the monitor currently sees in front, if any. Stored for
+    /// the same reason as `meetingInProgress`.
+    private(set) var appInFront: ChosenApp?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -77,6 +80,7 @@ final class AppModel {
         }
         focusedApps.onChange = { [unowned self] isInPausingApp in
             isInPausingApp ? self.scheduler.hold(.app) : self.scheduler.release(.app)
+            self.refreshAppStatus()
         }
     }
 
@@ -196,11 +200,17 @@ final class AppModel {
         }
         refreshIcon()
         refreshMeetingStatus()
+        refreshAppStatus()
     }
 
     private func refreshMeetingStatus() {
         let current = meetings.isInMeeting ? meetings.evidence : nil
         if current != meetingInProgress { meetingInProgress = current }
+    }
+
+    private func refreshAppStatus() {
+        let current = focusedApps.isInPausingApp ? focusedApps.app : nil
+        if current != appInFront { appInFront = current }
     }
 
     private func showPanel() {

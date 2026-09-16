@@ -3,7 +3,8 @@ import SwiftUI
 
 /// Pause-list editor: one opt-in toggle, and — once it is on — the apps that
 /// hold reminders back just by being the app you are in. Laid out like the two
-/// sections above it, so the panel reads as one thing.
+/// sections above it, down to the status line at the foot, so the panel reads
+/// as one thing.
 struct AppPauseSettingsView: View {
     let model: AppModel
     /// Cleared by the window whenever it takes the keyboard back — Esc, or a
@@ -19,6 +20,8 @@ struct AppPauseSettingsView: View {
             if settings.isEnabled {
                 appsSection.padding(.top, 20)
             }
+
+            summary.padding(.top, 18)
         }
         .animation(.snappy(duration: 0.2), value: settings.isEnabled)
         .animation(.snappy(duration: 0.2), value: settings.apps)
@@ -59,11 +62,29 @@ struct AppPauseSettingsView: View {
             )
             // The results dropdown hangs below the field, over the footnote.
             .zIndex(1)
-            Text(appsFootnote)
+            Text("Counts only while the app is in front. Kicks in after \(Int(AppPauseSettings.settleDelay)) seconds; reminders come back \(Int(AppPauseSettings.leaveGrace)) seconds after you leave.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // And over the summary below it.
+        .zIndex(1)
+    }
+
+    /// One plain-language line at the foot of the section, like the meeting
+    /// section's: what will happen, and what detection sees right now.
+    private var summary: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            if model.appInFront != nil {
+                Image(systemName: "macwindow")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text(summaryText)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: Data
@@ -74,11 +95,21 @@ struct AppPauseSettingsView: View {
         model.installedApps.matches(query, excluding: settings.apps, frontmostOnly: true)
     }
 
-    private var appsFootnote: String {
-        guard !settings.apps.isEmpty else {
-            return "No apps chosen, so nothing here will pause reminders."
+    private var summaryText: String {
+        guard settings.isEnabled else { return "Reminders run whatever app is in front." }
+        guard !settings.apps.isEmpty else { return "No apps chosen, so nothing here will pause reminders." }
+        if let app = model.appInFront {
+            return "\(app.name) is in front. Reminders are held until you leave it."
         }
-        return "Counts only while the app is in front. Kicks in after \(Int(AppPauseSettings.settleDelay)) seconds; reminders come back \(Int(AppPauseSettings.leaveGrace)) seconds after you leave."
+        return "Not in a chosen app right now. Reminders will hold while \(chosenAppNames) is in front."
+    }
+
+    /// "Minecraft or Steam", or "Minecraft, Steam or 4 other apps" once the
+    /// list would run long.
+    private var chosenAppNames: String {
+        let names = settings.apps.map(\.name)
+        guard names.count > 3 else { return names.formatted(.list(type: .or)) }
+        return (names.prefix(2) + ["\(names.count - 2) other apps"]).formatted(.list(type: .or))
     }
 
     private func edit(_ change: (inout AppPauseSettings) -> Void) {
