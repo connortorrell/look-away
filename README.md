@@ -154,6 +154,13 @@ and reminders are held back for as long as it is the app you are in.
 Opt-in like the rest. Leave **Pause reminders in certain apps** off and nothing
 is watched.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/settings-apps-dark.png">
+    <img src="docs/settings-apps-light.png" alt="Look Away settings panel with the schedule and meeting detection off and the app pause list on: chips for Minecraft and Steam over a search field, a footnote about the 5-second settle and 20-second grace, and a last line reading Not in a chosen app right now" width="470">
+  </picture>
+</p>
+
 - **Apps that pause reminders** is the same chips-over-a-search-field control as
   the meeting list, over the same list of every app installed on the Mac. It
   starts empty and stays that way until you put something in it: which apps
@@ -241,9 +248,10 @@ to the Trash. If Launch at Login was on, macOS removes the login item with it.
 
 - `Sources/LookAwayCore` — pure Foundation: `Config`, the `Timekeeper` clock
   abstraction, the `Schedule`, `MeetingSettings` and `AppPauseSettings` models
-  and their storage, the `MeetingMonitor` and `FocusedAppMonitor` debounces,
-  and the `BreakScheduler` state machine. Both monitors report to the same
-  hold on the scheduler, which keeps the popup back until the last one lifts.
+  and their storage, the `MeetingMonitor` and `FocusedAppMonitor` detectors
+  on one shared `DebouncedMonitor`, and the `BreakScheduler` state machine.
+  Both detectors report to the same hold on the scheduler, which keeps the
+  popup back until the last one lifts.
 - `Sources/LookAway` — AppKit/SwiftUI shell: menu bar item, floating panel,
   break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
   frontmost-app probe and the installed-apps scan, sleep/lock observers,
