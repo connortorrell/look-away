@@ -124,14 +124,17 @@ public final class MeetingMonitor {
         self.clock = clock
     }
 
-    /// Begin watching, if the feature is on.
+    /// Begin watching, if the feature is on. The first reading is taken at
+    /// face value: a call already under way when watching starts holds
+    /// straight away rather than after the detection delay, and a hold left
+    /// over from before is released at once if nothing is on.
     public func start() {
         stopPolling()
         guard settings.isEnabled, !settings.apps.isEmpty else {
             clearMeeting()
             return
         }
-        check()
+        check(debounced: false)
         schedulePoll()
     }
 
@@ -148,12 +151,26 @@ public final class MeetingMonitor {
         start()
     }
 
+    /// The Mac is going to sleep or the screen is locking. Nothing is polled
+    /// until it comes back; what was known stands until then.
+    public func systemDidSuspend() {
+        stopPolling()
+    }
+
+    /// Woke or unlocked. Whatever the debounce had been building towards is
+    /// stale — the call may have ended hours ago, or begun on the phone and
+    /// moved over — so the current reading is taken as it is, like a start.
+    public func systemDidResume() {
+        pendingSince = nil
+        start()
+    }
+
     // MARK: - Polling
 
     private func schedulePoll() {
         poll = clock.schedule(after: Self.pollInterval) { [weak self] in
             guard let self else { return }
-            self.check()
+            self.check(debounced: true)
             self.schedulePoll()
         }
     }
@@ -163,8 +180,9 @@ public final class MeetingMonitor {
         poll = nil
     }
 
-    /// One reading, debounced into a start or an end.
-    private func check() {
+    /// One reading. Debounced, a change has to hold for the detection delay or
+    /// the end grace before it counts; undebounced, it counts at once.
+    private func check(debounced: Bool) {
         let found = meetingEvidence(in: probe.sample(), settings: settings)
         let looksLikeMeeting = found != nil
         guard looksLikeMeeting != isInMeeting else {
@@ -175,11 +193,13 @@ public final class MeetingMonitor {
             return
         }
 
-        let now = clock.now()
-        let since = pendingSince ?? now
-        pendingSince = since
-        let required = looksLikeMeeting ? settings.detectionDelay : settings.endGrace
-        guard now.timeIntervalSince(since) >= required else { return }
+        if debounced {
+            let now = clock.now()
+            let since = pendingSince ?? now
+            pendingSince = since
+            let required = looksLikeMeeting ? settings.detectionDelay : settings.endGrace
+            guard now.timeIntervalSince(since) >= required else { return }
+        }
 
         pendingSince = nil
         isInMeeting = looksLikeMeeting

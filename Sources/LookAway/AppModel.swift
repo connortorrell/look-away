@@ -69,8 +69,17 @@ final class AppModel {
     func decline() { scheduler.decline() }
     func breakNow() { scheduler.breakNow() }
     func togglePause() { isPaused ? scheduler.resume() : scheduler.pause() }
-    func systemDidSuspend() { scheduler.systemDidSuspend() }
-    func systemDidResume() { scheduler.systemDidResume() }
+    func systemDidSuspend() {
+        scheduler.systemDidSuspend()
+        meetings.systemDidSuspend()
+    }
+
+    /// The monitor goes first so the scheduler re-arms knowing whether a call
+    /// is on right now, not what was on before the Mac slept.
+    func systemDidResume() {
+        meetings.systemDidResume()
+        scheduler.systemDidResume()
+    }
     func clockDidChange() { scheduler.clockDidChange() }
 
     /// Single write path for schedule edits: persist, then apply. The
@@ -83,9 +92,11 @@ final class AppModel {
     }
 
     /// Single write path for meeting-setting edits, mirroring `updateSchedule`.
-    /// Switching the feature off, or dropping the app a meeting was detected
-    /// from, makes the monitor report that meeting's end, which releases the
-    /// scheduler's hold through `onChange`.
+    /// The monitor re-reads the current state at once under the new settings:
+    /// switching the feature off, or dropping the app a meeting was detected
+    /// from, reports that meeting's end straight away, which releases the
+    /// scheduler's hold through `onChange`; switching it on during a call
+    /// holds straight away.
     func updateMeetingSettings(_ settings: MeetingSettings) {
         guard settings != meetingSettings else { return }
         meetingSettings = settings

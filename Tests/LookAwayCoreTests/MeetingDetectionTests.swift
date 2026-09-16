@@ -334,6 +334,71 @@ struct MeetingMonitorTests {
         monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [], detectionDelay: 15))
         #expect(!monitor.isInMeeting)
     }
+
+    /// With other apps still chosen the removal goes through a fresh reading
+    /// rather than the empty-list shortcut, and it still ends at once.
+    @Test func removingTheDetectedAppWhileOthersRemainEndsTheMeetingAtOnce() {
+        let monitor = makeMonitor()
+        monitor.start()
+        startMeeting()
+        clock.advance(by: 20)
+        #expect(monitor.isInMeeting)
+
+        let slack = MeetingApp.preset(for: "com.tinyspeck.slackmacgap")!
+        monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [slack], detectionDelay: 15))
+        #expect(!monitor.isInMeeting)
+    }
+
+    /// Watching may begin with a call already on — the app launched, or the
+    /// feature switched on, mid-meeting — and that is not a chime to wait out.
+    @Test func aCallAlreadyOnWhenWatchingStartsHoldsAtOnce() {
+        let monitor = makeMonitor()
+        startMeeting()
+        monitor.start()
+        #expect(monitor.isInMeeting)
+    }
+
+    @Test func nothingIsPolledWhileAsleep() {
+        let monitor = makeMonitor()
+        monitor.start()
+        monitor.systemDidSuspend()
+        let before = probe.sampleCount
+        clock.advance(by: 120)
+        #expect(probe.sampleCount == before)
+    }
+
+    /// The call ended while the Mac slept; waking must not report a meeting
+    /// for another grace period.
+    @Test func wakingWithNoCallEndsTheMeetingAtOnce() {
+        let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
+        monitor.start()
+        startMeeting()
+        clock.advance(by: 20)
+        monitor.systemDidSuspend()
+        endMeeting()
+        clock.advance(by: 3_600)
+
+        monitor.systemDidResume()
+        #expect(!monitor.isInMeeting)
+        #expect(changes == [true, false])
+    }
+
+    /// A call still going, or begun during the lock, holds without waiting
+    /// out the detection delay, and polling picks back up afterwards.
+    @Test func wakingIntoACallHoldsAtOnceAndResumesPolling() {
+        let monitor = makeMonitor()
+        monitor.start()
+        monitor.systemDidSuspend()
+        startMeeting()
+        monitor.systemDidResume()
+        #expect(monitor.isInMeeting)
+
+        endMeeting()
+        clock.advance(by: 60)
+        #expect(!monitor.isInMeeting)
+    }
 }
 
 @MainActor

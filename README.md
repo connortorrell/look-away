@@ -102,7 +102,11 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   anything. Once a meeting is on, a 30-second grace period keeps a spell on
   mute — or the gap between two back-to-back calls — from letting a popup
   through. That grace is also why a break owed at the end of a call arrives
-  about half a minute after you hang up rather than the instant you do.
+  about half a minute after you hang up rather than the instant you do. Both
+  apply to changes seen while watching: switching the feature on, editing its
+  settings, or waking the Mac reads the current state as it is, so a call
+  already under way holds straight away and one that ended during sleep is
+  released at once.
 - **The 20 minutes keeps running through a call.** Only the popup is held
   back, so time on the call still counts towards the next break:
   - A break that came due during the call opens the moment you hang up —
