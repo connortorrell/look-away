@@ -97,7 +97,10 @@ public final class BreakScheduler {
             // more useful thing to be told: "delayed" suggests the wait is the
             // only reason nothing is happening. The popup is held either way,
             // and the delay's own deadline carries over as the one the meeting
-            // owes.
+            // owes. Unlike the plain delay below, this one does not outlive
+            // the schedule: the only way out of a hold is `waitForBreak`,
+            // where the schedule's hold wins, so a break taken by hand outside
+            // the hours and delayed on a call is dropped when the call ends.
             holdForMeeting(dueAt: until)
             return
         }

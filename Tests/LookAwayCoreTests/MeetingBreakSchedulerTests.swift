@@ -338,6 +338,23 @@ struct MeetingBreakSchedulerTests {
         #expect(scheduler.state == held)
     }
 
+    /// A plain delay outside the hours comes back regardless of the window,
+    /// but one taken on a call is a meeting hold, and the schedule's hold wins
+    /// over that when the call ends. Pinned so the difference is deliberate.
+    @Test func aDelayTakenOnACallOutsideTheScheduleHandsOverToTheSchedule() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 20 * 3_600) // Monday 8pm, outside the window
+        scheduler.start()
+        scheduler.meetingDidStart()
+        scheduler.breakNow()
+        scheduler.snooze()
+        #expect(scheduler.state == .inMeeting(dueAt: at(20 * 3_600 + 10)))
+
+        clock.advance(by: 60)
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
+    }
+
     /// A call that is still going when the schedule opens holds the first
     /// break of the day instead of firing it into the call.
     @Test func aMeetingOutlastingTheOffHoursHoldKeepsHoldingWhenTheWindowOpens() {

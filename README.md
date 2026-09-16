@@ -119,7 +119,9 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   the delay's own deadline becomes the one the meeting owes. **Take a Break
   Now** still works, and pausing from the menu still outranks detection.
 - The schedule still wins: when the scheduled hours end mid-call the hold
-  hands over to the schedule, and nothing is owed when the call ends.
+  hands over to the schedule, and nothing is owed when the call ends. The same
+  goes for a break you took by hand outside the hours and then delayed during
+  a call — the schedule's hold takes over when the call ends.
 
 Capture processes don't always share their app's bundle ID — Zoom captures from
 `us.zoom.caphost` alongside `us.zoom.xos`, Electron apps capture from a nested
