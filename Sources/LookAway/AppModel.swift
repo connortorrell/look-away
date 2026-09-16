@@ -64,7 +64,8 @@ final class AppModel {
         focusedApps = FocusedAppMonitor(
             settings: appPauseSettings,
             probe: WorkspaceFrontmostAppProbe(),
-            clock: clock
+            clock: clock,
+            ownBundleID: Bundle.main.bundleIdentifier
         )
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
         meetings.onChange = { [unowned self] isInMeeting in

@@ -36,6 +36,10 @@ public final class FocusedAppMonitor {
     private var settings: AppPauseSettings
     private let probe: FrontmostAppProbing
     private let clock: Timekeeper
+    /// Look Away's own bundle ID. Seeing ourselves in front says nothing about
+    /// the app the user is really in — the settings window activates us — so
+    /// those readings are skipped rather than counted as leaving.
+    private let ownBundleID: String?
     private var poll: ScheduledTask?
     /// When the current run of "in the app" / "out of it" began.
     private var pendingSince: Date?
@@ -43,11 +47,13 @@ public final class FocusedAppMonitor {
     public init(
         settings: AppPauseSettings = .standard,
         probe: FrontmostAppProbing,
-        clock: Timekeeper
+        clock: Timekeeper,
+        ownBundleID: String? = nil
     ) {
         self.settings = settings
         self.probe = probe
         self.clock = clock
+        self.ownBundleID = ownBundleID
     }
 
     /// Begin watching, if the feature is on and something is chosen.
@@ -77,6 +83,10 @@ public final class FocusedAppMonitor {
         guard settings != self.settings else { return }
         self.settings = settings
         pendingSince = nil
+        // The re-read in `start()` is most likely looking at our own settings
+        // window, which says nothing about the app we were holding for. The
+        // edit does: off the list means the hold is over.
+        if let app, settings.app(inFront: app.bundleID) == nil { clearPause() }
         start()
     }
 
@@ -99,7 +109,14 @@ public final class FocusedAppMonitor {
     /// hold for the settle or grace period first; a reading taken because the
     /// settings changed is acted on at once.
     private func check(debounced: Bool) {
-        let found = settings.app(inFront: probe.frontmostBundleID())
+        let frontmost = probe.frontmostBundleID()
+        // Our own windows are how the user talks to us, not somewhere they
+        // went. Neither starts, extends nor breaks a run.
+        if let frontmost, let ownBundleID,
+           frontmost.caseInsensitiveCompare(ownBundleID) == .orderedSame {
+            return
+        }
+        let found = settings.app(inFront: frontmost)
         let isInApp = found != nil
         guard isInApp != isInPausingApp else {
             // The reading agrees with where we are; drop any part-run and keep

@@ -21,11 +21,14 @@ struct FocusedAppMonitorTests {
 
     let minecraft = ChosenApp(bundleID: "com.mojang.minecraft", name: "Minecraft")
 
+    let lookAway = "com.connortorrell.LookAway"
+
     private func makeMonitor(enabled: Bool = true, apps: [ChosenApp]? = nil) -> FocusedAppMonitor {
         FocusedAppMonitor(
             settings: AppPauseSettings(isEnabled: enabled, apps: apps ?? [minecraft]),
             probe: probe,
-            clock: clock
+            clock: clock,
+            ownBundleID: lookAway
         )
     }
 
@@ -175,6 +178,90 @@ struct FocusedAppMonitorTests {
 
         monitor.apply(settings: AppPauseSettings(isEnabled: false, apps: [minecraft]))
         #expect(!monitor.isInPausingApp)
+    }
+
+    /// The desktop, a login window or a screen saver reports no app at all,
+    /// and that is leaving like anything else.
+    @Test func noFrontmostAppCountsAsLeaving() {
+        let monitor = makeMonitor()
+        probe.bundleID = minecraft.bundleID
+        monitor.start()
+        #expect(monitor.isInPausingApp)
+
+        probe.bundleID = nil
+        clock.advance(by: AppPauseSettings.leaveGrace + FocusedAppMonitor.pollInterval)
+        #expect(!monitor.isInPausingApp)
+        #expect(monitor.app == nil)
+    }
+
+    // MARK: Our own windows
+
+    /// The settings panel activates Look Away, so it is in front for as long as
+    /// the list is being edited. That is not leaving the game.
+    @Test func ourOwnWindowDoesNotCountAsLeaving() {
+        let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
+
+        probe.bundleID = minecraft.bundleID
+        monitor.start()
+        probe.bundleID = lookAway
+        clock.advance(by: AppPauseSettings.leaveGrace * 3)
+
+        #expect(monitor.isInPausingApp)
+        #expect(monitor.app == minecraft)
+        #expect(changes == [true])
+    }
+
+    /// Nor does a glance at our own window restart the settle period.
+    @Test func ourOwnWindowDoesNotResetTheSettle() {
+        let monitor = makeMonitor()
+        probe.bundleID = "com.apple.finder"
+        monitor.start()
+
+        probe.bundleID = minecraft.bundleID
+        clock.advance(by: 3) // one poll in the app, at 2 s
+        probe.bundleID = lookAway
+        clock.advance(by: 10)
+        probe.bundleID = minecraft.bundleID
+        clock.advance(by: FocusedAppMonitor.pollInterval)
+
+        #expect(monitor.isInPausingApp)
+    }
+
+    /// Edits come from our own window, so the re-read after one sees Look Away
+    /// in front. Adding an app must not read as having left the one we are in.
+    @Test func addingAnAppFromOurOwnWindowKeepsTheHold() {
+        let steam = ChosenApp(bundleID: "com.valvesoftware.steam", name: "Steam")
+        let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
+
+        probe.bundleID = minecraft.bundleID
+        monitor.start()
+        probe.bundleID = lookAway
+        monitor.apply(settings: AppPauseSettings(isEnabled: true, apps: [minecraft, steam]))
+
+        #expect(monitor.isInPausingApp)
+        #expect(changes == [true])
+    }
+
+    /// And taking the app we are holding for off the list still releases at
+    /// once, with our own window in front.
+    @Test func removingTheHeldAppFromOurOwnWindowReleasesAtOnce() {
+        let steam = ChosenApp(bundleID: "com.valvesoftware.steam", name: "Steam")
+        let monitor = makeMonitor(apps: [minecraft, steam])
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
+
+        probe.bundleID = minecraft.bundleID
+        monitor.start()
+        probe.bundleID = lookAway
+        monitor.apply(settings: AppPauseSettings(isEnabled: true, apps: [steam]))
+
+        #expect(!monitor.isInPausingApp)
+        #expect(monitor.app == nil)
+        #expect(changes == [true, false])
     }
 }
 

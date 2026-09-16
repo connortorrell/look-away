@@ -90,6 +90,18 @@ struct AppPauseSchedulerTests {
         #expect(scheduler.state == .paused(byUser: true))
     }
 
+    /// At launch the monitors report before the scheduler is started, so a
+    /// hold placed against a stopped scheduler has to be honoured on start.
+    @Test func aHoldPlacedBeforeStartIsHonouredOnStart() {
+        let scheduler = makeScheduler()
+        scheduler.hold(.app)
+        scheduler.start()
+        #expect(scheduler.state == .held(dueAt: at(100), by: .app))
+
+        scheduler.release(.app)
+        #expect(scheduler.state == .idle(fireAt: at(100)))
+    }
+
     /// Switching the feature off mid-hold, which reaches the scheduler as a
     /// release for a hold the monitor will never report the end of.
     @Test func releasingAHoldThatWasNeverPlacedDoesNothing() {

@@ -167,9 +167,11 @@ is watched.
   through a window to reach something behind it holds nothing. Leaving has a
   20-second grace period, so alt-tabbing out to look something up and straight
   back does not land a popup on the way in.
-- Editing the list is acted on at once rather than waiting out either period:
-  switching the feature on while already in the app holds immediately, and
-  taking the app you are in back off the list releases immediately.
+- Editing the list is acted on at once rather than waiting out the grace
+  period: taking the app you are in back off the list releases immediately.
+  Look Away's own windows never count as leaving, so opening this panel
+  mid-game does not end the hold. At launch the app already in front counts
+  straight away.
 - **The 20 minutes keeps running**, exactly as it does through a meeting. A
   break that came due mid-session opens when you leave the app, and a session
   shorter than the time left just carries on counting. It is one break either
