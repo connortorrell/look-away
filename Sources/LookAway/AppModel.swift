@@ -19,6 +19,9 @@ final class AppModel {
     private(set) var schedule: Schedule
     /// Same idea for the meeting settings.
     private(set) var meetingSettings: MeetingSettings
+    /// The meeting the monitor currently sees, if any. Stored rather than
+    /// computed so SwiftUI can watch it; the monitor itself is not observable.
+    private(set) var meetingInProgress: MeetingEvidence?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -53,7 +56,10 @@ final class AppModel {
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
         meetings.onChange = { [unowned self] isInMeeting in
             isInMeeting ? self.scheduler.meetingDidStart() : self.scheduler.meetingDidEnd()
-            self.refreshIcon()
+            // A hold or release the scheduler makes emits an event, which
+            // refreshes the display; paused or off-schedule it makes neither,
+            // so the panel's status is refreshed here as well.
+            self.refreshMeetingStatus()
         }
     }
 
@@ -68,8 +74,17 @@ final class AppModel {
     func decline() { scheduler.decline() }
     func breakNow() { scheduler.breakNow() }
     func togglePause() { isPaused ? scheduler.resume() : scheduler.pause() }
-    func systemDidSuspend() { scheduler.systemDidSuspend() }
-    func systemDidResume() { scheduler.systemDidResume() }
+    func systemDidSuspend() {
+        scheduler.systemDidSuspend()
+        meetings.systemDidSuspend()
+    }
+
+    /// The monitor goes first so the scheduler re-arms knowing whether a call
+    /// is on right now, not what was on before the Mac slept.
+    func systemDidResume() {
+        meetings.systemDidResume()
+        scheduler.systemDidResume()
+    }
     func clockDidChange() { scheduler.clockDidChange() }
 
     /// Single write path for schedule edits: persist, then apply. The
@@ -82,18 +97,16 @@ final class AppModel {
     }
 
     /// Single write path for meeting-setting edits, mirroring `updateSchedule`.
+    /// The monitor re-reads the current state at once under the new settings:
+    /// switching the feature off, or dropping the app a meeting was detected
+    /// from, reports that meeting's end straight away, which releases the
+    /// scheduler's hold through `onChange`; switching it on during a call
+    /// holds straight away.
     func updateMeetingSettings(_ settings: MeetingSettings) {
         guard settings != meetingSettings else { return }
-        let wasEnabled = meetingSettings.isEnabled
         meetingSettings = settings
         meetingStore.save(settings)
         meetings.apply(settings: settings)
-        // Turning it off has to release a hold the monitor already placed;
-        // it will not report an end for a meeting it stopped watching.
-        if wasEnabled, !settings.isEnabled {
-            scheduler.meetingDetectionDidStop()
-        }
-        refreshIcon()
     }
 
     /// Called when the settings panel opens. Fills an untouched app list with
@@ -144,6 +157,12 @@ final class AppModel {
             break
         }
         refreshIcon()
+        refreshMeetingStatus()
+    }
+
+    private func refreshMeetingStatus() {
+        let current = meetings.isInMeeting ? meetings.evidence : nil
+        if current != meetingInProgress { meetingInProgress = current }
     }
 
     private func showPanel() {

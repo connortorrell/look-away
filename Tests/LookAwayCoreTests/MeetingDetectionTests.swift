@@ -36,9 +36,33 @@ struct MeetingAppMatchingTests {
 
     /// Arc ships as `company.thebrowser.Browser` but captures from
     /// `company.thebrowser.browser.helper`.
+    /// FaceTime.app never touches the microphone itself; the system's call
+    /// daemon does, for FaceTime and for iPhone calls taken on the Mac.
+    @Test func matchesFaceTimesCallDaemon() {
+        let facetime = MeetingApp.preset(for: "com.apple.FaceTime")!
+        #expect(facetime.matches(processBundleID: "com.apple.avconferenced"))
+    }
+
     @Test func matchesRegardlessOfCase() {
         let arc = MeetingApp(bundleID: "company.thebrowser.Browser", name: "Arc")
         #expect(arc.matches(processBundleID: "company.thebrowser.browser.helper"))
+    }
+
+    /// Every browser in the presets is reachable from its capture process.
+    @Test func matchesEachBrowsersCaptureProcess() {
+        let captures = [
+            ("com.google.Chrome", "com.google.Chrome.helper"),
+            ("com.microsoft.edgemac", "com.microsoft.edgemac.helper"),
+            ("company.thebrowser.Browser", "company.thebrowser.browser.helper"),
+            ("com.brave.Browser", "com.brave.Browser.helper"),
+            ("org.mozilla.firefox", "org.mozilla.firefox"),
+            ("com.apple.Safari", "com.apple.WebKit.GPU"),
+        ]
+        for (bundleID, process) in captures {
+            let browser = MeetingApp.preset(for: bundleID)
+            #expect(browser?.matches(processBundleID: process) == true, "\(bundleID) should own \(process)")
+            #expect(browser?.attributesCamera == false, "\(bundleID) should not be credited with camera use")
+        }
     }
 
     @Test func doesNotMatchAnUnrelatedApp() {
@@ -88,6 +112,34 @@ struct MeetingEvidenceTests {
     @Test func cameraUseAloneIsNotAMeeting() {
         let activity = MeetingActivity(isCameraInUse: true)
         #expect(meetingEvidence(in: activity, settings: settings) == nil)
+    }
+
+    /// A browser is playing something most of the day, so the camera cannot be
+    /// pinned on it — otherwise a YouTube tab plus Photo Booth would be a
+    /// "Google Chrome meeting".
+    @Test func cameraUseWithABrowserPlayingAudioIsNotAMeeting() {
+        let browsing = MeetingSettings(
+            isEnabled: true,
+            apps: [MeetingApp.preset(for: "us.zoom.xos")!, MeetingApp.preset(for: "com.google.Chrome")!]
+        )
+        let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper"], isCameraInUse: true)
+        #expect(meetingEvidence(in: activity, settings: browsing) == nil)
+    }
+
+    /// But a browser still counts for the microphone, where the process is named.
+    @Test func aBrowserHoldingTheMicrophoneIsStillAMeeting() {
+        let browsing = MeetingSettings(isEnabled: true, apps: [MeetingApp.preset(for: "com.google.Chrome")!])
+        let activity = MeetingActivity(capturingBundleIDs: ["com.google.Chrome.helper"])
+        #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Google Chrome")
+    }
+
+    @Test func cameraUseWithAMeetingAppAndABrowserPlayingIsPinnedOnTheMeetingApp() {
+        let browsing = MeetingSettings(
+            isEnabled: true,
+            apps: [MeetingApp.preset(for: "com.google.Chrome")!, MeetingApp.preset(for: "us.zoom.xos")!]
+        )
+        let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper", "us.zoom.caphost"], isCameraInUse: true)
+        #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Zoom")
     }
 
     @Test func cameraCanBeIgnored() {
@@ -240,8 +292,12 @@ struct MeetingMonitorTests {
         #expect(changes == [true, false])
     }
 
+    /// Switching off has to report the end of a meeting already under way:
+    /// that report is what releases the scheduler's hold.
     @Test func switchingOffStopsPollingAndClearsTheMeeting() {
         let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
         monitor.start()
         startMeeting()
         clock.advance(by: 20)
@@ -249,6 +305,7 @@ struct MeetingMonitorTests {
 
         monitor.apply(settings: MeetingSettings(isEnabled: false, apps: [zoom]))
         #expect(!monitor.isInMeeting)
+        #expect(changes == [true, false])
 
         let before = probe.sampleCount
         clock.advance(by: 120)
@@ -277,6 +334,71 @@ struct MeetingMonitorTests {
         monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [], detectionDelay: 15))
         #expect(!monitor.isInMeeting)
     }
+
+    /// With other apps still chosen the removal goes through a fresh reading
+    /// rather than the empty-list shortcut, and it still ends at once.
+    @Test func removingTheDetectedAppWhileOthersRemainEndsTheMeetingAtOnce() {
+        let monitor = makeMonitor()
+        monitor.start()
+        startMeeting()
+        clock.advance(by: 20)
+        #expect(monitor.isInMeeting)
+
+        let slack = MeetingApp.preset(for: "com.tinyspeck.slackmacgap")!
+        monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [slack], detectionDelay: 15))
+        #expect(!monitor.isInMeeting)
+    }
+
+    /// Watching may begin with a call already on — the app launched, or the
+    /// feature switched on, mid-meeting — and that is not a chime to wait out.
+    @Test func aCallAlreadyOnWhenWatchingStartsHoldsAtOnce() {
+        let monitor = makeMonitor()
+        startMeeting()
+        monitor.start()
+        #expect(monitor.isInMeeting)
+    }
+
+    @Test func nothingIsPolledWhileAsleep() {
+        let monitor = makeMonitor()
+        monitor.start()
+        monitor.systemDidSuspend()
+        let before = probe.sampleCount
+        clock.advance(by: 120)
+        #expect(probe.sampleCount == before)
+    }
+
+    /// The call ended while the Mac slept; waking must not report a meeting
+    /// for another grace period.
+    @Test func wakingWithNoCallEndsTheMeetingAtOnce() {
+        let monitor = makeMonitor()
+        var changes: [Bool] = []
+        monitor.onChange = { changes.append($0) }
+        monitor.start()
+        startMeeting()
+        clock.advance(by: 20)
+        monitor.systemDidSuspend()
+        endMeeting()
+        clock.advance(by: 3_600)
+
+        monitor.systemDidResume()
+        #expect(!monitor.isInMeeting)
+        #expect(changes == [true, false])
+    }
+
+    /// A call still going, or begun during the lock, holds without waiting
+    /// out the detection delay, and polling picks back up afterwards.
+    @Test func wakingIntoACallHoldsAtOnceAndResumesPolling() {
+        let monitor = makeMonitor()
+        monitor.start()
+        monitor.systemDidSuspend()
+        startMeeting()
+        monitor.systemDidResume()
+        #expect(monitor.isInMeeting)
+
+        endMeeting()
+        clock.advance(by: 60)
+        #expect(!monitor.isInMeeting)
+    }
 }
 
 @MainActor
@@ -286,6 +408,37 @@ struct MeetingSettingsTests {
         // As the installed-apps list would offer it: bundle ID and name only.
         settings.add(MeetingApp(bundleID: "us.zoom.xos", name: "zoom.us"))
         #expect(settings.apps[0].matches(processBundleID: "us.zoom.caphost"))
+    }
+
+    /// A browser picked from the installed list knows only its bundle ID and
+    /// name; the preset supplies the camera rule.
+    @Test func addingABrowserInheritsThePresetsCameraRule() {
+        var settings = MeetingSettings()
+        settings.add(MeetingApp(bundleID: "com.google.Chrome", name: "Google Chrome"))
+        settings.add(MeetingApp(bundleID: "com.acme.meet", name: "Acme Meet"))
+        #expect(!settings.apps[0].attributesCamera)
+        #expect(settings.apps[1].attributesCamera)
+    }
+
+    /// Apps saved before the camera rule existed have no key for it.
+    @Test func anAppSavedWithoutTheCameraRuleDecodesAsCounting() throws {
+        let saved = #"{"bundleID":"us.zoom.xos","name":"Zoom","extraPrefixes":["us.zoom."]}"#
+        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        #expect(app.attributesCamera)
+        #expect(app.extraPrefixes == ["us.zoom."])
+    }
+
+    /// A chip seeded before its preset learned about a sibling process has an
+    /// empty prefix list on disk; reading it back fills the list in, so the fix
+    /// reaches installs that already have the app chosen.
+    @Test func anAppSavedWithoutPrefixesPicksUpThePresetsOnLoad() throws {
+        let saved = #"{"bundleID":"com.apple.FaceTime","name":"FaceTime","extraPrefixes":[]}"#
+        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        #expect(app.matches(processBundleID: "com.apple.avconferenced"))
+
+        // An app with no preset keeps its empty list; nothing is invented.
+        let unknown = #"{"bundleID":"com.acme.meet","name":"Acme Meet"}"#
+        #expect(try JSONDecoder().decode(MeetingApp.self, from: Data(unknown.utf8)).extraPrefixes.isEmpty)
     }
 
     @Test func appsAreNotAddedTwice() {

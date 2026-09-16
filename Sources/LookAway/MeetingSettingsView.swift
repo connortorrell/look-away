@@ -6,11 +6,18 @@ import SwiftUI
 /// schedule section above it, so the panel reads as one thing.
 struct MeetingSettingsView: View {
     let model: AppModel
-    /// Owned by `SettingsView`, which needs to be able to clear it when a
-    /// click lands anywhere else in the panel.
-    @FocusState.Binding var isSearching: Bool
+    /// Cleared by the window whenever it takes the keyboard back — Esc, or a
+    /// click anywhere that is not a field — so the results list never sticks.
+    @FocusState private var isSearching: Bool
 
     @State private var query = ""
+    /// Opens with the listen-only option showing whenever it is switched on.
+    @State private var isShowingListenOnly: Bool
+
+    init(model: AppModel) {
+        self.model = model
+        _isShowingListenOnly = State(initialValue: model.meetingSettings.countsAudioOutput)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,11 +27,14 @@ struct MeetingSettingsView: View {
                 appsSection.padding(.top, 20)
                 delaySection.padding(.top, 20)
                 cameraToggle.padding(.top, 14)
-                audioOutputToggle.padding(.top, 14)
+                listenOnlySection.padding(.top, 16)
             }
+
+            summary.padding(.top, 18)
         }
         .animation(.snappy(duration: 0.2), value: settings.isEnabled)
         .animation(.snappy(duration: 0.2), value: settings.apps)
+        .animation(.snappy(duration: 0.2), value: isShowingListenOnly)
         .onAppear { model.prepareMeetingSettings() }
         // Leaving the field puts it back to its placeholder, so clicking in
         // again never opens onto a stale search.
@@ -36,16 +46,12 @@ struct MeetingSettingsView: View {
     // MARK: Sections
 
     private var header: some View {
-        Toggle(isOn: binding(\.isEnabled)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Pause reminders during meetings").font(.headline)
-                Text("Holds the popup while one of the apps below is using the mic or camera.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Pause reminders during meetings",
+            detail: "Holds the popup while you're on a call in one of the apps you choose.",
+            prominence: .section,
+            isOn: binding(\.isEnabled)
+        )
     }
 
     private var appsSection: some View {
@@ -56,24 +62,46 @@ struct MeetingSettingsView: View {
                 query: $query,
                 isSearching: $isSearching,
                 results: results,
+                isLoadingResults: !model.installedApps.isLoaded,
                 add: { app in
                     edit { $0.add(app) }
                     query = ""
                 },
                 remove: { bundleID in edit { $0.remove(bundleID) } }
             )
-            Text(appsFootnote)
+            // The results dropdown hangs below the field, over the footnote.
+            .zIndex(1)
+            Text("Detected from real microphone and camera use — not from which app is in front.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // And over the sections below this one.
+        .zIndex(1)
+    }
+
+    /// One plain-language line at the foot of the section, like the schedule's:
+    /// what will happen, and — since detection is invisible until it holds a
+    /// break — what it sees right now.
+    private var summary: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            if model.meetingInProgress != nil {
+                Image(systemName: "video.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text(summaryText)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var delaySection: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Detection delay").font(.subheadline.weight(.medium))
-                Text("How long the mic has to stay busy before it counts.")
+                Text("How long the signal has to hold before it counts.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -89,29 +117,34 @@ struct MeetingSettingsView: View {
     }
 
     private var cameraToggle: some View {
-        Toggle(isOn: binding(\.countsCamera)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count camera use too").font(.subheadline.weight(.medium))
-                Text("Keeps you covered while muted but on video.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        SettingsToggleRow(
+            "Count camera use too",
+            detail: "Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.",
+            isOn: binding(\.countsCamera)
+        )
+    }
+
+    /// The weakest signal stays out of the way, like the per-day hours in the
+    /// schedule section: one quiet row, and the toggle only exists once it is
+    /// open.
+    private var listenOnlySection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsDisclosureButton("Also detect listen-only calls", isExpanded: $isShowingListenOnly)
+
+            if isShowingListenOnly {
+                audioOutputToggle
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .toggleStyle(.switch)
     }
 
     /// Off by default, and honest about the cost of turning it on.
     private var audioOutputToggle: some View {
-        Toggle(isOn: binding(\.countsAudioOutput)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count audio playing too").font(.subheadline.weight(.medium))
-                Text("Catches listen-only calls. May also pause for videos and notification sounds.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Count audio playing too",
+            detail: "Catches listen-only calls. May also pause for videos and notification sounds.",
+            isOn: binding(\.countsAudioOutput)
+        )
     }
 
     // MARK: Data
@@ -122,15 +155,26 @@ struct MeetingSettingsView: View {
         model.installedApps.matches(query, excluding: settings)
     }
 
-    private var appsFootnote: String {
-        guard !settings.apps.isEmpty else {
-            return "No apps chosen, so nothing will be detected as a meeting."
+    private var summaryText: String {
+        guard settings.isEnabled else { return "Reminders run through calls." }
+        guard !settings.apps.isEmpty else { return "No apps chosen, so calls won't hold reminders." }
+        if let meeting = model.meetingInProgress {
+            return "\(meeting.app.name) is on a call. Reminders are held until it ends."
         }
-        return "Detected from real microphone and camera use — not from which app is in front."
+        return "Not in a meeting right now. Calls in \(chosenAppNames) will hold reminders."
+    }
+
+    /// "Zoom, Slack and FaceTime", or "Zoom, Microsoft Teams and 4 other apps"
+    /// once the list would run long.
+    private var chosenAppNames: String {
+        let names = settings.apps.map(\.name)
+        guard names.count > 3 else { return names.formatted(.list(type: .and)) }
+        return (names.prefix(2) + ["\(names.count - 2) other apps"]).formatted(.list(type: .and))
     }
 
     private static func label(for delay: TimeInterval) -> String {
-        delay == 0 ? "Immediately" : "\(Int(delay)) sec"
+        if delay == 0 { return "Immediately" }
+        return delay < 60 ? "\(Int(delay)) sec" : "\(Int(delay / 60)) min"
     }
 
     private func edit(_ change: (inout MeetingSettings) -> Void) {
@@ -156,37 +200,68 @@ private struct AppTokenField: View {
     @Binding var query: String
     @FocusState.Binding var isSearching: Bool
     let results: [InstalledApp]
+    /// The installed-apps scan has not finished, so an empty `results` means
+    /// "not yet" rather than "no match".
+    let isLoadingResults: Bool
     let add: (MeetingApp) -> Void
     let remove: (String) -> Void
+    @Environment(ClickFocusGuard.self) private var focusGuard
+    /// Height of the chips-and-field box, which is where the dropdown hangs from.
+    @State private var fieldHeight: CGFloat = 0
+    /// Height the result rows would like; the list scrolls once it is capped.
+    @State private var resultsHeight: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                if !apps.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(apps) { app in
-                            AppChip(app: app, remove: { remove(app.bundleID) })
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            if !apps.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(apps) { app in
+                        AppChip(app: app, remove: { remove(app.bundleID) })
                     }
                 }
-                searchField
             }
-            .padding(8)
-
+            searchField
+        }
+        .padding(8)
+        .background(fieldBackground(lit: isSearching))
+        // The results float over whatever is below rather than pushing it
+        // down: opening and closing the list then moves nothing else in the
+        // panel, so a switch clicked while the list is open is still under
+        // the pointer when the mouse comes back up.
+        .overlay(alignment: .top) {
             if isSearching {
-                Divider()
-                resultList
+                resultsDropdown
+                    .offset(y: fieldHeight + 4)
+                    .transition(.opacity)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .textBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSearching ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
-        )
         .animation(.snappy(duration: 0.15), value: isSearching)
+        // A click anywhere in here — a result, a chip, the field — keeps the
+        // field focused, so several apps can be added in a row and a result
+        // is still where it was when the mouse comes back up.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            fieldHeight = frame.height
+            focusGuard.regions["apps"] = frame
+        }
+    }
+
+    private var resultsDropdown: some View {
+        resultList
+            .background(fieldBackground(lit: false))
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                focusGuard.regions["appResults"] = frame
+            }
+            .onDisappear { focusGuard.regions["appResults"] = nil }
+    }
+
+    private func fieldBackground(lit: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color(nsColor: .textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(lit ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
+            )
     }
 
     private var searchField: some View {
@@ -205,13 +280,20 @@ private struct AppTokenField: View {
         }
     }
 
+    private var emptyResultsMessage: String {
+        if isLoadingResults { return "Looking for installed apps…" }
+        if query.isEmpty { return "Every installed app is already in the list." }
+        return "No app matches “\(query)”."
+    }
+
     @ViewBuilder private var resultList: some View {
         if results.isEmpty {
-            Text(query.isEmpty ? "Looking for installed apps…" : "No app matches “\(query)”.")
+            Text(emptyResultsMessage)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -220,9 +302,12 @@ private struct AppTokenField: View {
                     }
                 }
                 .padding(4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { resultsHeight = $0 }
             }
-            // Tall enough to browse, short enough to leave the panel usable.
-            .frame(maxHeight: 176)
+            // A scroll view takes whatever height it is offered, so it is
+            // sized to its rows here: tall enough to browse, short enough to
+            // leave the panel usable.
+            .frame(height: min(resultsHeight, 176))
         }
     }
 }
@@ -234,19 +319,22 @@ private struct AppChip: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             Text(app.name).font(.subheadline)
             Button(action: remove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
+                    // The glyph is tiny; the target it sits in is not.
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove \(app.name)")
         }
         .padding(.leading, 8)
-        .padding(.trailing, 6)
-        .padding(.vertical, 4)
+        .padding(.trailing, 1)
+        .padding(.vertical, 1)
         .background(Capsule().fill(Color.primary.opacity(0.09)))
         .help(app.bundleID)
     }

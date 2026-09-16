@@ -96,6 +96,21 @@ struct MeetingBreakSchedulerTests {
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
+    /// Detection can report a call before the first interval is armed — the
+    /// monitor starts alongside the scheduler, and a call may already be on.
+    @Test func aMeetingAlreadyOnAtStartHoldsTheFirstBreak() {
+        let scheduler = makeScheduler()
+        scheduler.meetingDidStart()
+        #expect(scheduler.state == .stopped)
+
+        scheduler.start()
+        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+
+        clock.advance(by: 150)
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .breaking(remaining: 5))
+    }
+
     // MARK: Interrupted breaks
 
     /// A break cut short by a call was never taken, so it is owed straight
@@ -215,25 +230,6 @@ struct MeetingBreakSchedulerTests {
         #expect(scheduler.state == .breaking(remaining: 5))
     }
 
-    /// Turning detection off releases the hold, keeping the deadline.
-    @Test func switchingDetectionOffReleasesTheHold() {
-        let scheduler = makeScheduler()
-        scheduler.start()
-        clock.advance(by: 30)
-        scheduler.meetingDidStart()
-        scheduler.meetingDetectionDidStop()
-        #expect(scheduler.state == .idle(fireAt: at(100)))
-    }
-
-    @Test func switchingDetectionOffAfterTheBreakCameDueOpensIt() {
-        let scheduler = makeScheduler()
-        scheduler.start()
-        scheduler.meetingDidStart()
-        clock.advance(by: 300)
-        scheduler.meetingDetectionDidStop()
-        #expect(scheduler.state == .breaking(remaining: 5))
-    }
-
     // MARK: Sleep
 
     @Test func sleepingDuringAMeetingWakesToAFreshInterval() {
@@ -261,8 +257,26 @@ struct MeetingBreakSchedulerTests {
         #expect(scheduler.state == .inMeeting(dueAt: at(140)))
     }
 
+    // MARK: Clock changes
+
+    /// The deadline is wall-clock, so a jump forward just means the break is
+    /// owed sooner once the call ends.
+    @Test func aClockChangeDuringAMeetingKeepsTheDeadline() {
+        let scheduler = makeScheduler()
+        scheduler.start()
+        scheduler.meetingDidStart()
+
+        clock.jump(to: at(500))
+        scheduler.clockDidChange()
+        #expect(scheduler.state == .inMeeting(dueAt: at(100)))
+
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .breaking(remaining: 5))
+    }
+
     // MARK: Schedule
 
+    /// Monday 9-5, with the fake clock's reference date being a Monday.
     private var mondayOnly: Schedule {
         Schedule(
             isEnabled: true,
@@ -277,27 +291,128 @@ struct MeetingBreakSchedulerTests {
         return calendar
     }
 
+    /// Monday is the only active day, so every closed window reopens a week on.
+    private var nextMonday: Date { at(7 * 86_400 + 9 * 3_600) }
+
+    private func makeMondayScheduler() -> BreakScheduler {
+        BreakScheduler(config: config, schedule: mondayOnly, clock: clock, calendar: utc)
+    }
+
     /// The schedule still applies once the call ends.
     @Test func aMeetingEndingOutsideTheScheduleHoldsForTheSchedule() {
-        let scheduler = BreakScheduler(config: config, schedule: mondayOnly, clock: clock, calendar: utc)
+        let scheduler = makeMondayScheduler()
         clock.advance(by: 10 * 3_600) // Monday 10am, inside the window
         scheduler.start()
         scheduler.meetingDidStart()
         clock.advance(by: 8 * 3_600) // 6pm, the window has closed
         scheduler.meetingDidEnd()
 
-        // Monday is the only active day, so it reopens a week on.
-        #expect(scheduler.state == .offSchedule(until: at(7 * 86_400 + 9 * 3_600)))
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
+    }
+
+    /// The hold begins the moment the window closes, call or no call, so the
+    /// menu never claims a break is owed at nine in the evening.
+    @Test func theWindowClosingDuringAMeetingHandsOverToTheSchedule() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 17 * 3_600 - 60) // Monday, a minute before 5pm
+        scheduler.start()
+        scheduler.meetingDidStart()
+        #expect(scheduler.state == .inMeeting(dueAt: at(17 * 3_600 + 40)))
+
+        clock.advance(by: 60)
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
+
+        // Nothing owed once the call ends either.
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
     }
 
     /// Outside the scheduled hours there is nothing pending to hold, and that
     /// hold already outlasts any call.
     @Test func aMeetingOutsideTheScheduleLeavesTheHoldAlone() {
-        let scheduler = BreakScheduler(config: config, schedule: mondayOnly, clock: clock, calendar: utc)
+        let scheduler = makeMondayScheduler()
         clock.advance(by: 20 * 3_600) // Monday 8pm, outside the window
         scheduler.start()
         let held = scheduler.state
         scheduler.meetingDidStart()
         #expect(scheduler.state == held)
+    }
+
+    /// A plain delay outside the hours comes back regardless of the window,
+    /// but one taken on a call is a meeting hold, and the schedule's hold wins
+    /// over that when the call ends. Pinned so the difference is deliberate.
+    @Test func aDelayTakenOnACallOutsideTheScheduleHandsOverToTheSchedule() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 20 * 3_600) // Monday 8pm, outside the window
+        scheduler.start()
+        scheduler.meetingDidStart()
+        scheduler.breakNow()
+        scheduler.snooze()
+        #expect(scheduler.state == .inMeeting(dueAt: at(20 * 3_600 + 10)))
+
+        clock.advance(by: 60)
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
+    }
+
+    /// A call that is still going when the schedule opens holds the first
+    /// break of the day instead of firing it into the call.
+    @Test func aMeetingOutlastingTheOffHoursHoldKeepsHoldingWhenTheWindowOpens() {
+        let scheduler = makeMondayScheduler()
+        scheduler.start() // Monday midnight, before the window
+        #expect(scheduler.state == .offSchedule(until: at(9 * 3_600)))
+        scheduler.meetingDidStart()
+
+        clock.advance(by: 9 * 3_600)
+        #expect(scheduler.state == .inMeeting(dueAt: at(9 * 3_600 + 100)))
+
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .idle(fireAt: at(9 * 3_600 + 100)))
+    }
+
+    /// Editing the schedule mid-call keeps the deadline, the way editing it
+    /// mid-interval does; only the wait for the window's edge is redone.
+    @Test func editingTheScheduleDuringAMeetingKeepsTheDeadline() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 10 * 3_600)
+        scheduler.start()
+        clock.advance(by: 30)
+        scheduler.meetingDidStart()
+        var events: [BreakScheduler.Event] = []
+        scheduler.onEvent = { events.append($0) }
+
+        var longerDay = mondayOnly
+        longerDay.hours = TimeWindow(start: TimeOfDay(hour: 8, minute: 0), end: TimeOfDay(hour: 18, minute: 0))
+        scheduler.apply(schedule: longerDay)
+        #expect(scheduler.state == .inMeeting(dueAt: at(10 * 3_600 + 100)))
+        #expect(events == [.scheduleChanged])
+        #expect(clock.pendingCount == 1) // the wait for 6pm, nothing for the break
+
+        clock.advance(by: 8 * 3_600) // 6pm under the new hours
+        #expect(scheduler.state == .offSchedule(until: at(7 * 86_400 + 8 * 3_600)))
+    }
+
+    @Test func aScheduleEditThatClosesTheWindowDuringAMeetingHolds() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 10 * 3_600)
+        scheduler.start()
+        scheduler.meetingDidStart()
+
+        scheduler.apply(schedule: Schedule(isEnabled: true, activeDays: []))
+        #expect(scheduler.state == .offSchedule(until: nil))
+
+        scheduler.meetingDidEnd()
+        #expect(scheduler.state == .offSchedule(until: nil))
+    }
+
+    @Test func aClockChangeOutOfTheWindowDuringAMeetingHolds() {
+        let scheduler = makeMondayScheduler()
+        clock.advance(by: 10 * 3_600)
+        scheduler.start()
+        scheduler.meetingDidStart()
+
+        clock.jump(to: at(20 * 3_600)) // Monday 8pm
+        scheduler.clockDidChange()
+        #expect(scheduler.state == .offSchedule(until: nextMonday))
     }
 }

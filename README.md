@@ -23,7 +23,8 @@ time, look at something 20 feet away for 20 seconds.
 - The next 20-minute interval starts when the panel closes (finished or
   declined), never from a snooze.
 - Sleep or screen lock pauses everything; wake or unlock starts a fresh
-  20 minutes. Meetings hold reminders the same way, if you switch that on.
+  20 minutes. Meetings hold the popup too, if you switch that on — but the
+  20 minutes keeps counting (see below).
 - Menu: live "Next break in m:ss", Pause / Resume Reminders, Take a Break Now,
   Launch at Login, Settings, Quit.
 
@@ -53,19 +54,28 @@ reminders run around the clock, exactly as before.
   window closes. **Take a Break Now** still works.
 
 The schedule is saved to preferences and applied the moment it is edited, without
-restarting the current 20 minutes. The settings window closes with ⌘W or Esc and
-reopens where you left it.
+restarting the current 20 minutes. The settings window closes with ⌘W or Esc —
+if a field has the keyboard, the first Esc hands it back and the second closes —
+and reopens where you left it.
 
 ## Meetings
 
 The same panel can hold reminders while you're on a call. Also opt-in: leave
 **Pause reminders during meetings** off and nothing is watched at all.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/settings-meetings-dark.png">
+    <img src="docs/settings-meetings-light.png" alt="Look Away settings panel with the schedule off and meeting detection on: chips for Zoom, Microsoft Teams, Slack, Pop, Discord and FaceTime over a search field, a 15-second detection delay, camera use counted, a collapsed row for listen-only calls, and a last line reading Not in a meeting right now" width="470">
+  </picture>
+</p>
+
 - **Apps that count as a meeting** is a list of chips over a search field. Type
   to search every app installed on the Mac and click one to add it; click the
   × on a chip to drop it. The first time the panel opens, the meeting apps you
-  actually have installed — Zoom, Teams, Slack, Pop, Discord, FaceTime, Webex
-  and the browsers — are filled in for you. Clear the list and it stays clear.
+  actually have installed — Zoom, Teams, Slack, Pop, Discord, FaceTime, Webex,
+  and the browsers (Chrome, Edge, Arc, Brave, Firefox, Safari) — are filled in
+  for you. Clear the list and it stays clear.
 - Detection watches **real device use, not which app is in front**: macOS is
   asked which processes are holding an input stream, so a Zoom window sitting
   in the background during a call still counts, and Zoom merely being open does
@@ -79,19 +89,28 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   the audio devices, playing the call you are listening to. A chosen app merely
   being *open* is not enough, so Photo Booth — or anything else using the
   camera — is never mistaken for a meeting just because Zoom or a browser
-  happens to be running.
-- **Count audio playing too** is off by default and best left that way. Audio
+  happens to be running. Browsers don't count for the camera at all, even
+  while playing audio: one is playing something most of the day, so a
+  website using the camera would otherwise read as a meeting. They still
+  count for the microphone, where the process is named.
+- **Count audio playing too**, tucked behind *Also detect listen-only calls*,
+  is off by default and best left that way. Audio
   coming *out* of an app is a weak signal — a YouTube video, a Slack ping and a
   call all look identical — and browsers and chat apps are in the list above,
   so switching it on will sometimes hold reminders during ordinary browsing.
   Worth it only if you sit in listen-only calls that release the microphone
   entirely; most apps mute in software and keep it open, so they are already
   covered without this.
-- **Detection delay** is how long the microphone has to stay busy before it
-  counts, so a notification chime or a quick "can you hear me?" doesn't hold
-  anything. Once a meeting is on, a 30-second grace period keeps a spell on
+- **Detection delay** is how long the signal — microphone, camera or audio —
+  has to hold before it counts, so a notification chime or a quick "can you
+  hear me?" doesn't hold anything. Once a meeting is on, a 30-second grace period keeps a spell on
   mute — or the gap between two back-to-back calls — from letting a popup
-  through.
+  through. That grace is also why a break owed at the end of a call arrives
+  about half a minute after you hang up rather than the instant you do. Both
+  apply to changes seen while watching: switching the feature on, editing its
+  settings, or waking the Mac reads the current state as it is, so a call
+  already under way holds straight away and one that ended during sleep is
+  released at once.
 - **The 20 minutes keeps running through a call.** Only the popup is held
   back, so time on the call still counts towards the next break:
   - A break that came due during the call opens the moment you hang up —
@@ -107,13 +126,22 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   during the call — being on a call is the more useful thing to be told, and
   the delay's own deadline becomes the one the meeting owes. **Take a Break
   Now** still works, and pausing from the menu still outranks detection.
+- The panel's last line says what detection sees right now — "Not in a
+  meeting right now" with the apps that count, or "Zoom is on a call.
+  Reminders are held until it ends." — so you can tell at a glance whether a
+  call is being picked up, and by which app.
+- The schedule still wins: when the scheduled hours end mid-call the hold
+  hands over to the schedule, and nothing is owed when the call ends. The same
+  goes for a break you took by hand outside the hours and then delayed during
+  a call — the schedule's hold takes over when the call ends.
 
 Capture processes don't always share their app's bundle ID — Zoom captures from
-`us.zoom.caphost` alongside `us.zoom.xos`, and Electron apps capture from a
-nested helper — so each app carries the ID patterns that belong to it.
-Chromium browsers are matched through their helper; Safari hands capture to a
-shared WebKit process that doesn't say which browser it came from, so that one
-entry covers any WebKit browser.
+`us.zoom.caphost` alongside `us.zoom.xos`, Electron apps capture from a nested
+helper, and FaceTime (like an iPhone call answered on the Mac) captures from the
+system's call daemon, `com.apple.avconferenced` — so each app carries the ID
+patterns that belong to it. Chromium browsers are matched through their helper;
+Safari hands capture to a shared WebKit process that doesn't say which browser
+it came from, so that one entry covers any WebKit browser.
 
 ## Install
 
