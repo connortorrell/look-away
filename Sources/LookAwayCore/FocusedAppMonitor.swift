@@ -21,6 +21,9 @@ public protocol FrontmostAppProbing: AnyObject {
 /// `leaveGrace` before reminders come back, so clicking through a window or
 /// glancing at another app mid-game doesn't flip anything. Nothing is polled
 /// at all while the feature is off.
+///
+/// Polled, rather than fed by `NSWorkspace`'s activation notifications, so it
+/// works the same way as `MeetingMonitor` and this module stays AppKit-free.
 @MainActor
 public final class FocusedAppMonitor {
     /// How often the frontmost app is read. Cheap — it is one lookup — and

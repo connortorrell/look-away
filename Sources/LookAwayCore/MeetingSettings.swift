@@ -93,7 +93,7 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
         // only knows its own bundle ID, and Zoom's capture process is a
         // sibling, and a browser should not be credited with camera use.
         var app = app
-        if let preset = ChosenApp.preset(for: app.bundleID) {
+        if let preset = ChosenApp.meetingPreset(for: app.bundleID) {
             if app.extraPrefixes.isEmpty { app.extraPrefixes = preset.extraPrefixes }
             app.attributesCamera = preset.attributesCamera
         }

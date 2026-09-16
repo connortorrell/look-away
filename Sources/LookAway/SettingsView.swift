@@ -2,8 +2,8 @@ import SwiftUI
 import LookAwayCore
 
 /// The settings panel: when reminders are allowed to fire, and when they
-/// should get out of the way. Both halves are opt-in and both stay collapsed
-/// to a single toggle until switched on, so the panel opens quiet.
+/// should get out of the way. Every section is opt-in and stays collapsed to
+/// a single toggle until switched on, so the panel opens quiet.
 struct SettingsView: View {
     /// The window's content width: wide enough for a row of app chips to read
     /// well. The content fills whatever is left of it beside the scroll bar.
@@ -357,7 +357,7 @@ struct SettingsDisclosureButton: View {
     }
 }
 
-/// Shared by both sections of the panel.
+/// Shared by the sections of the panel.
 struct SettingsSectionLabel: View {
     let text: String
     init(_ text: String) { self.text = text }

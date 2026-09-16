@@ -16,7 +16,7 @@ final class FakeActivityProbe: MeetingActivityProbing {
 
 @MainActor
 struct ChosenAppMatchingTests {
-    let zoom = ChosenApp.preset(for: "us.zoom.xos")!
+    let zoom = ChosenApp.meetingPreset(for: "us.zoom.xos")!
     let pop = ChosenApp(bundleID: "com.pop.pop.app", name: "Pop")
 
     @Test func matchesTheAppItself() {
@@ -39,7 +39,7 @@ struct ChosenAppMatchingTests {
     /// FaceTime.app never touches the microphone itself; the system's call
     /// daemon does, for FaceTime and for iPhone calls taken on the Mac.
     @Test func matchesFaceTimesCallDaemon() {
-        let facetime = ChosenApp.preset(for: "com.apple.FaceTime")!
+        let facetime = ChosenApp.meetingPreset(for: "com.apple.FaceTime")!
         #expect(facetime.matches(processBundleID: "com.apple.avconferenced"))
     }
 
@@ -59,7 +59,7 @@ struct ChosenAppMatchingTests {
             ("com.apple.Safari", "com.apple.WebKit.GPU"),
         ]
         for (bundleID, process) in captures {
-            let browser = ChosenApp.preset(for: bundleID)
+            let browser = ChosenApp.meetingPreset(for: bundleID)
             #expect(browser?.matches(processBundleID: process) == true, "\(bundleID) should own \(process)")
             #expect(browser?.attributesCamera == false, "\(bundleID) should not be credited with camera use")
         }
@@ -75,7 +75,7 @@ struct ChosenAppMatchingTests {
 @MainActor
 struct MeetingEvidenceTests {
     private var settings: MeetingSettings {
-        MeetingSettings(isEnabled: true, apps: [ChosenApp.preset(for: "us.zoom.xos")!])
+        MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPreset(for: "us.zoom.xos")!])
     }
 
     @Test func microphoneUseByAChosenAppIsAMeeting() {
@@ -120,7 +120,7 @@ struct MeetingEvidenceTests {
     @Test func cameraUseWithABrowserPlayingAudioIsNotAMeeting() {
         let browsing = MeetingSettings(
             isEnabled: true,
-            apps: [ChosenApp.preset(for: "us.zoom.xos")!, ChosenApp.preset(for: "com.google.Chrome")!]
+            apps: [ChosenApp.meetingPreset(for: "us.zoom.xos")!, ChosenApp.meetingPreset(for: "com.google.Chrome")!]
         )
         let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper"], isCameraInUse: true)
         #expect(meetingEvidence(in: activity, settings: browsing) == nil)
@@ -128,7 +128,7 @@ struct MeetingEvidenceTests {
 
     /// But a browser still counts for the microphone, where the process is named.
     @Test func aBrowserHoldingTheMicrophoneIsStillAMeeting() {
-        let browsing = MeetingSettings(isEnabled: true, apps: [ChosenApp.preset(for: "com.google.Chrome")!])
+        let browsing = MeetingSettings(isEnabled: true, apps: [ChosenApp.meetingPreset(for: "com.google.Chrome")!])
         let activity = MeetingActivity(capturingBundleIDs: ["com.google.Chrome.helper"])
         #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Google Chrome")
     }
@@ -136,7 +136,7 @@ struct MeetingEvidenceTests {
     @Test func cameraUseWithAMeetingAppAndABrowserPlayingIsPinnedOnTheChosenApp() {
         let browsing = MeetingSettings(
             isEnabled: true,
-            apps: [ChosenApp.preset(for: "com.google.Chrome")!, ChosenApp.preset(for: "us.zoom.xos")!]
+            apps: [ChosenApp.meetingPreset(for: "com.google.Chrome")!, ChosenApp.meetingPreset(for: "us.zoom.xos")!]
         )
         let activity = MeetingActivity(playingBundleIDs: ["com.google.Chrome.helper", "us.zoom.caphost"], isCameraInUse: true)
         #expect(meetingEvidence(in: activity, settings: browsing)?.app.name == "Zoom")
@@ -198,7 +198,7 @@ struct MeetingEvidenceTests {
 struct MeetingMonitorTests {
     let clock = FakeTimekeeper()
     let probe = FakeActivityProbe()
-    let zoom = ChosenApp.preset(for: "us.zoom.xos")!
+    let zoom = ChosenApp.meetingPreset(for: "us.zoom.xos")!
 
     private func makeMonitor(delay: TimeInterval = 15, grace: TimeInterval = 30) -> MeetingMonitor {
         let settings = MeetingSettings(
@@ -344,7 +344,7 @@ struct MeetingMonitorTests {
         clock.advance(by: 20)
         #expect(monitor.isInMeeting)
 
-        let slack = ChosenApp.preset(for: "com.tinyspeck.slackmacgap")!
+        let slack = ChosenApp.meetingPreset(for: "com.tinyspeck.slackmacgap")!
         monitor.apply(settings: MeetingSettings(isEnabled: true, apps: [slack], detectionDelay: 15))
         #expect(!monitor.isInMeeting)
     }

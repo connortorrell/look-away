@@ -48,7 +48,7 @@ public struct ChosenApp: Codable, Equatable, Hashable, Identifiable, Sendable {
         name = try container.decode(String.self, forKey: .name)
         attributesCamera = try container.decodeIfPresent(Bool.self, forKey: .attributesCamera) ?? true
         let saved = try container.decodeIfPresent([String].self, forKey: .extraPrefixes) ?? []
-        extraPrefixes = saved.isEmpty ? ChosenApp.preset(for: bundleID)?.extraPrefixes ?? [] : saved
+        extraPrefixes = saved.isEmpty ? ChosenApp.meetingPreset(for: bundleID)?.extraPrefixes ?? [] : saved
     }
 
     /// Whether a process's bundle ID belongs to this app. Only meeting
@@ -99,10 +99,10 @@ public extension ChosenApp {
         ),
     ]
 
-    /// The preset carrying the extra prefixes for `bundleID`, if there is one.
-    /// Lets an app picked out of the installed-apps list inherit the sibling
-    /// and helper knowledge baked into `meetingPresets`.
-    static func preset(for bundleID: String) -> ChosenApp? {
+    /// The meeting preset carrying the extra prefixes for `bundleID`, if there
+    /// is one. Lets an app picked out of the installed-apps list inherit the
+    /// sibling and helper knowledge baked into `meetingPresets`.
+    static func meetingPreset(for bundleID: String) -> ChosenApp? {
         meetingPresets.first { $0.bundleID.caseInsensitiveCompare(bundleID) == .orderedSame }
     }
 }
