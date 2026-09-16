@@ -35,7 +35,7 @@ struct AppPauseSettingsView: View {
     private var header: some View {
         SettingsToggleRow(
             "Pause reminders in certain apps",
-            detail: "Holds the popup while one of the apps below is the app you're in.",
+            detail: "Holds the popup while one of the apps below is in front.",
             prominence: .section,
             isOn: binding(\.isEnabled)
         )
@@ -78,7 +78,7 @@ struct AppPauseSettingsView: View {
         guard !settings.apps.isEmpty else {
             return "No apps chosen, so nothing here will pause reminders."
         }
-        return "Nothing is asked of the microphone or the camera — only which app is in front. Reminders come back \(Int(AppPauseSettings.leaveGrace)) seconds after you leave."
+        return "Counts only while the app is in front. Kicks in after \(Int(AppPauseSettings.settleDelay)) seconds; reminders come back \(Int(AppPauseSettings.leaveGrace)) seconds after you leave."
     }
 
     private func edit(_ change: (inout AppPauseSettings) -> Void) {

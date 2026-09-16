@@ -177,7 +177,7 @@ is watched.
   shorter than the time left just carries on counting. It is one break either
   way, not a queue of them.
 - While a hold is on the menu bar shows a window icon and the menu reads
-  "Minecraft — next break in 4:32", or "break when you're done" once it is
+  "In Minecraft — next break in 4:32", or "break when you're done" once it is
   already due. **Take a Break Now** still works, and pausing from the menu
   still outranks detection.
 

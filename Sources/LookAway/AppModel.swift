@@ -265,14 +265,14 @@ final class AppModel {
     }
 
     /// What the menu leads with while a hold is on. Naming the app is the
-    /// point: "In a meeting" is only reached when detection lost track of which
-    /// app it was.
+    /// point; the fallbacks are only reached when detection lost track of
+    /// which app it was.
     private static func lead(for reason: BreakScheduler.HoldReason, meeting: ChosenApp?, app: ChosenApp?) -> String {
         switch reason {
         case .meeting:
             return meeting.map { "\($0.name) meeting" } ?? "In a meeting"
         case .app:
-            return app?.name ?? "In a paused app"
+            return app.map { "In \($0.name)" } ?? "In a chosen app"
         }
     }
 
