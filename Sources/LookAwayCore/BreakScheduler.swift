@@ -103,13 +103,16 @@ public final class BreakScheduler {
         emit(.breakDismissed)
         let now = clock.now()
         let until = now.addingTimeInterval(config.snoozeInterval)
-        // A break delayed while on a call is still a call, and that is the more
-        // useful thing to be told: "delayed" suggests the wait is the only
-        // reason nothing is happening. The popup is held either way, and the
-        // delay's own deadline carries over as the one the hold owes.
         if let reason = primaryHold {
-            state = .held(dueAt: until, by: reason)
-            emit(.scheduleChanged)
+            // A break delayed while on a call is still a call, and that is the
+            // more useful thing to be told: "delayed" suggests the wait is the
+            // only reason nothing is happening. The popup is held either way,
+            // and the delay's own deadline carries over as the one the hold
+            // owes. Unlike the plain delay below, this one does not outlive
+            // the schedule: the only way out of a hold is `waitForBreak`,
+            // where the schedule's hold wins, so a break taken by hand outside
+            // the hours and delayed on a call is dropped when the call ends.
+            holdBack(dueAt: until, by: reason)
             return
         }
         state = .snoozed(until: until)
@@ -137,33 +140,55 @@ public final class BreakScheduler {
 
     /// Place a hold. Holds the popup back and closes one already up — the whole
     /// point is not to be interrupted — while keeping the deadline the
-    /// countdown was working towards, so the time still counts. A user pause
-    /// outranks this and is left alone.
+    /// countdown was working towards, so the time still counts. A user pause,
+    /// the schedule's own hold, and a scheduler that has not started yet are
+    /// left alone: the hold is recorded and carried into whatever is armed
+    /// next.
     public func hold(_ reason: HoldReason) {
         holds.insert(reason)
-        guard let primary = primaryHold, state != .stopped else { return }
+        guard let primary = primaryHold else { return }
+        let dueAt: Date
         switch state {
-        case .paused:
-            return
-        // Already held: the second reason is recorded above and only changes
-        // what the menu says, if it outranks the one on display.
-        case .held(let dueAt, let current):
-            guard current != primary else { return }
-            state = .held(dueAt: dueAt, by: primary)
+        case .idle(let fireAt):
+            dueAt = fireAt
+        case .snoozed(let until):
+            dueAt = until
+        case .breaking:
+            // Cut short, so never taken: owed the moment the hold lifts.
+            dueAt = clock.now()
+        case .held(let current, let shown):
+            // Already held: the second reason is recorded above and only
+            // changes what the menu says, if it outranks the one on display.
+            guard shown != primary else { return }
+            state = .held(dueAt: current, by: primary)
             emit(.scheduleChanged)
             return
-        // Outside the scheduled hours nothing is pending anyway, and that hold
-        // already outlasts this one.
-        case .offSchedule:
+        case .stopped, .paused, .offSchedule:
             return
-        case .idle, .breaking, .snoozed, .stopped:
-            break
         }
-        let dueAt = currentDeadline()
         cancelPending()
         if case .breaking = state { emit(.breakDismissed) }
-        state = .held(dueAt: dueAt, by: primary)
-        emit(.scheduleChanged)
+        holdBack(dueAt: dueAt, by: primary)
+    }
+
+    /// Lift a hold. The countdown ran through it, so a break that came due
+    /// while it was on opens now; otherwise the remainder plays out. Any other
+    /// hold still in place keeps the popup back, and takes over the menu.
+    ///
+    /// Safe to call for a hold that was never placed, which is what switching
+    /// a detector off amounts to.
+    public func release(_ reason: HoldReason) {
+        holds.remove(reason)
+        guard case .held(let dueAt, let shown) = state else { return }
+        if let remaining = primaryHold {
+            // Releasing a hold that was not the one on display changes nothing
+            // anyone can see.
+            guard remaining != shown else { return }
+            state = .held(dueAt: dueAt, by: remaining)
+            emit(.scheduleChanged)
+            return
+        }
+        waitForBreak(dueAt: dueAt)
     }
 
     /// The reason shown while a hold is on. A meeting outranks an app: being
@@ -172,50 +197,6 @@ public final class BreakScheduler {
     private var primaryHold: HoldReason? {
         if holds.contains(.meeting) { return .meeting }
         return holds.isEmpty ? nil : .app
-    }
-
-    /// When the break the current state was heading towards is owed.
-    private func currentDeadline() -> Date {
-        switch state {
-        case .idle(let fireAt):
-            return fireAt
-        case .snoozed(let until):
-            return until
-        // A break cut short by the hold was never taken, so it is owed the
-        // moment the hold lifts.
-        case .breaking:
-            return clock.now()
-        case .stopped, .paused, .offSchedule, .held:
-            return clock.now().addingTimeInterval(config.workInterval)
-        }
-    }
-
-    /// Lift a hold. The countdown ran through it, so a break that came due
-    /// while it was on is taken now; otherwise the remainder plays out. Any
-    /// other hold still in place keeps the popup back, and takes over the menu.
-    ///
-    /// Safe to call for a hold that was never placed, which is what switching
-    /// a detector off amounts to.
-    public func release(_ reason: HoldReason) {
-        holds.remove(reason)
-        guard case .held(let dueAt, let current) = state else { return }
-        if let remaining = primaryHold {
-            // Releasing a hold that was not the one on display changes nothing
-            // anyone can see.
-            guard remaining != current else { return }
-            state = .held(dueAt: dueAt, by: remaining)
-            emit(.scheduleChanged)
-            return
-        }
-        guard schedule.allows(clock.now(), calendar: calendar) else {
-            enterOffSchedule()
-            return
-        }
-        if dueAt <= clock.now() {
-            beginBreak()
-        } else {
-            scheduleWork(dueAt: dueAt)
-        }
     }
 
     /// User turned reminders off from the menu.
@@ -245,27 +226,46 @@ public final class BreakScheduler {
 
     // MARK: - Transitions
 
-    /// Start the wait over, a full interval from now.
+    /// A fresh work interval from now.
     private func armWork() {
-        scheduleWork(dueAt: clock.now().addingTimeInterval(config.workInterval))
+        waitForBreak(dueAt: clock.now().addingTimeInterval(config.workInterval))
     }
 
-    /// Wait for the break owed at `dueAt`, which may be less than a full
-    /// interval away when a countdown is being picked back up mid-flight.
-    private func scheduleWork(dueAt: Date) {
+    /// Head for the break owed at `dueAt`: a full interval away from
+    /// `armWork()`, or whatever was left when a hold lifted. The schedule's
+    /// hold wins; a detector's hold keeps the popup back but keeps `dueAt`; a
+    /// deadline that has already passed opens the break straight away.
+    private func waitForBreak(dueAt: Date) {
         cancelPending()
-        if let reason = primaryHold {
-            state = .held(dueAt: dueAt, by: reason)
-            emit(.scheduleChanged)
-            return
-        }
         let now = clock.now()
         guard schedule.allows(now, calendar: calendar) else {
             enterOffSchedule()
             return
         }
+        if let reason = primaryHold {
+            holdBack(dueAt: dueAt, by: reason)
+            return
+        }
+        guard dueAt > now else {
+            beginBreak()
+            return
+        }
         state = .idle(fireAt: dueAt)
         wait(until: dueAt)
+        emit(.scheduleChanged)
+    }
+
+    /// Hold the popup back while the countdown runs on towards `dueAt`.
+    /// Nothing is armed for the break itself — `release(_:)` reads the clock —
+    /// but the schedule closing still has to be noticed, so that edge is
+    /// waited for as usual.
+    private func holdBack(dueAt: Date, by reason: HoldReason) {
+        cancelPending()
+        state = .held(dueAt: dueAt, by: reason)
+        let now = clock.now()
+        if let close = schedule.currentWindowEnd(at: now, calendar: calendar) {
+            pending = clock.schedule(after: close.timeIntervalSince(now)) { [weak self] in self?.evaluate() }
+        }
         emit(.scheduleChanged)
     }
 
@@ -283,9 +283,9 @@ public final class BreakScheduler {
     /// without a timer have nothing to re-check.
     private func reevaluate() {
         switch state {
-        case .stopped, .paused, .breaking, .held:
+        case .stopped, .paused, .breaking:
             return
-        case .idle, .snoozed, .offSchedule:
+        case .idle, .snoozed, .offSchedule, .held:
             cancelPending()
             evaluate()
         }
@@ -297,12 +297,6 @@ public final class BreakScheduler {
         let now = clock.now()
         switch state {
         case .idle(let target), .snoozed(let target):
-            if let reason = primaryHold {
-                cancelPending()
-                state = .held(dueAt: target, by: reason)
-                emit(.scheduleChanged)
-                return
-            }
             guard schedule.allows(now, calendar: calendar) else {
                 enterOffSchedule()
                 return
@@ -315,9 +309,22 @@ public final class BreakScheduler {
             } else {
                 beginBreak()
             }
+        case .held(let dueAt, _):
+            // The window closed under the hold, or the schedule or clock
+            // changed. The schedule's hold wins; otherwise the hold and its
+            // deadline stand, against whatever the window edge is now.
+            guard schedule.allows(now, calendar: calendar) else {
+                enterOffSchedule()
+                return
+            }
+            if let reason = primaryHold {
+                holdBack(dueAt: dueAt, by: reason)
+            } else {
+                waitForBreak(dueAt: dueAt)
+            }
         case .offSchedule:
             armWork()
-        case .stopped, .paused, .breaking, .held:
+        case .stopped, .paused, .breaking:
             break
         }
     }

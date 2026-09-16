@@ -19,6 +19,9 @@ final class AppModel {
     private(set) var schedule: Schedule
     /// Same idea for the meeting settings.
     private(set) var meetingSettings: MeetingSettings
+    /// The meeting the monitor currently sees, if any. Stored rather than
+    /// computed so SwiftUI can watch it; the monitor itself is not observable.
+    private(set) var meetingInProgress: MeetingEvidence?
     /// And for the list of apps that pause reminders on their own.
     private(set) var appPauseSettings: AppPauseSettings
 
@@ -66,11 +69,13 @@ final class AppModel {
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
         meetings.onChange = { [unowned self] isInMeeting in
             isInMeeting ? self.scheduler.hold(.meeting) : self.scheduler.release(.meeting)
-            self.refreshIcon()
+            // A hold or release the scheduler makes emits an event, which
+            // refreshes the display; paused or off-schedule it makes neither,
+            // so the panel's status is refreshed here as well.
+            self.refreshMeetingStatus()
         }
         focusedApps.onChange = { [unowned self] isInPausingApp in
             isInPausingApp ? self.scheduler.hold(.app) : self.scheduler.release(.app)
-            self.refreshIcon()
         }
     }
 
@@ -86,8 +91,17 @@ final class AppModel {
     func decline() { scheduler.decline() }
     func breakNow() { scheduler.breakNow() }
     func togglePause() { isPaused ? scheduler.resume() : scheduler.pause() }
-    func systemDidSuspend() { scheduler.systemDidSuspend() }
-    func systemDidResume() { scheduler.systemDidResume() }
+    func systemDidSuspend() {
+        scheduler.systemDidSuspend()
+        meetings.systemDidSuspend()
+    }
+
+    /// The monitor goes first so the scheduler re-arms knowing whether a call
+    /// is on right now, not what was on before the Mac slept.
+    func systemDidResume() {
+        meetings.systemDidResume()
+        scheduler.systemDidResume()
+    }
     func clockDidChange() { scheduler.clockDidChange() }
 
     /// Single write path for schedule edits: persist, then apply. The
@@ -100,33 +114,27 @@ final class AppModel {
     }
 
     /// Single write path for meeting-setting edits, mirroring `updateSchedule`.
+    /// The monitor re-reads the current state at once under the new settings:
+    /// switching the feature off, or dropping the app a meeting was detected
+    /// from, reports that meeting's end straight away, which releases the
+    /// scheduler's hold through `onChange`; switching it on during a call
+    /// holds straight away.
     func updateMeetingSettings(_ settings: MeetingSettings) {
         guard settings != meetingSettings else { return }
-        let wasEnabled = meetingSettings.isEnabled
         meetingSettings = settings
         meetingStore.save(settings)
         meetings.apply(settings: settings)
-        // Turning it off has to release a hold the monitor already placed;
-        // it will not report an end for a meeting it stopped watching.
-        if wasEnabled, !settings.isEnabled {
-            scheduler.release(.meeting)
-        }
-        refreshIcon()
     }
 
-    /// Single write path for the pause list, mirroring `updateMeetingSettings`.
+    /// Single write path for the pause list, mirroring `updateMeetingSettings`:
+    /// the monitor re-reads at once, and an edit that takes its hold away —
+    /// switching off, or dropping the app you are in — reports the end
+    /// through `onChange`.
     func updateAppPauseSettings(_ settings: AppPauseSettings) {
         guard settings != appPauseSettings else { return }
-        let wasWatching = appPauseSettings.isWatching
         appPauseSettings = settings
         appPauseStore.save(settings)
         focusedApps.apply(settings: settings)
-        // Belt and braces, as above: the monitor reports its own end, but a
-        // hold must not outlive the list that placed it either way.
-        if wasWatching, !focusedApps.isInPausingApp {
-            scheduler.release(.app)
-        }
-        refreshIcon()
     }
 
     /// Called when the settings panel opens. Fills an untouched app list with
@@ -184,6 +192,12 @@ final class AppModel {
             break
         }
         refreshIcon()
+        refreshMeetingStatus()
+    }
+
+    private func refreshMeetingStatus() {
+        let current = meetings.isInMeeting ? meetings.evidence : nil
+        if current != meetingInProgress { meetingInProgress = current }
     }
 
     private func showPanel() {
@@ -228,7 +242,7 @@ final class AppModel {
             guard let until else { return "No days scheduled" }
             return "Outside schedule — back \(Self.formatOpening(until, from: clock.now()))"
         case .held(let dueAt, let reason):
-            let lead = Self.lead(for: reason, meeting: meetings.evidence?.app, app: focusedApps.app)
+            let lead = Self.lead(for: reason, meeting: meetingInProgress?.app, app: focusedApps.app)
             let remaining = dueAt.timeIntervalSince(clock.now())
             // The countdown keeps running through a hold, so it can already be owed.
             guard remaining > 0 else { return "\(lead) — \(Self.owed(for: reason))" }

@@ -26,6 +26,9 @@ struct InstalledApp: Identifiable, Hashable {
 @Observable
 final class InstalledApps {
     private(set) var all: [InstalledApp] = []
+    /// False until the first scan has landed, so an empty `all` can be told
+    /// apart from "nothing matched".
+    private(set) var isLoaded = false
     private var scan: Task<[InstalledApp], Never>?
 
     private nonisolated static let searchRoots = [
@@ -48,6 +51,7 @@ final class InstalledApps {
         scan = task
         let found = await task.value
         all = found
+        isLoaded = true
         return found
     }
 

@@ -6,11 +6,18 @@ import SwiftUI
 /// schedule section above it, so the panel reads as one thing.
 struct MeetingSettingsView: View {
     let model: AppModel
-    /// Owned by `SettingsView`, which needs to be able to clear it when a
-    /// click lands anywhere else in the panel.
-    @FocusState.Binding var isSearching: Bool
+    /// Cleared by the window whenever it takes the keyboard back — Esc, or a
+    /// click anywhere that is not a field — so the results list never sticks.
+    @FocusState private var isSearching: Bool
 
     @State private var query = ""
+    /// Opens with the listen-only option showing whenever it is switched on.
+    @State private var isShowingListenOnly: Bool
+
+    init(model: AppModel) {
+        self.model = model
+        _isShowingListenOnly = State(initialValue: model.meetingSettings.countsAudioOutput)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,11 +27,14 @@ struct MeetingSettingsView: View {
                 appsSection.padding(.top, 20)
                 delaySection.padding(.top, 20)
                 cameraToggle.padding(.top, 14)
-                audioOutputToggle.padding(.top, 14)
+                listenOnlySection.padding(.top, 16)
             }
+
+            summary.padding(.top, 18)
         }
         .animation(.snappy(duration: 0.2), value: settings.isEnabled)
         .animation(.snappy(duration: 0.2), value: settings.apps)
+        .animation(.snappy(duration: 0.2), value: isShowingListenOnly)
         .onAppear { model.prepareMeetingSettings() }
         // Leaving the field puts it back to its placeholder, so clicking in
         // again never opens onto a stale search.
@@ -36,16 +46,12 @@ struct MeetingSettingsView: View {
     // MARK: Sections
 
     private var header: some View {
-        Toggle(isOn: binding(\.isEnabled)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Pause reminders during meetings").font(.headline)
-                Text("Holds the popup while one of the apps below is using the mic or camera.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Pause reminders during meetings",
+            detail: "Holds the popup while you're on a call in one of the apps you choose.",
+            prominence: .section,
+            isOn: binding(\.isEnabled)
+        )
     }
 
     private var appsSection: some View {
@@ -56,24 +62,47 @@ struct MeetingSettingsView: View {
                 query: $query,
                 isSearching: $isSearching,
                 results: results,
+                isLoadingResults: !model.installedApps.isLoaded,
+                focusRegion: "meetingApps",
                 add: { app in
                     edit { $0.add(app) }
                     query = ""
                 },
                 remove: { bundleID in edit { $0.remove(bundleID) } }
             )
-            Text(appsFootnote)
+            // The results dropdown hangs below the field, over the footnote.
+            .zIndex(1)
+            Text("Detected from real microphone and camera use — not from which app is in front.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // And over the sections below this one.
+        .zIndex(1)
+    }
+
+    /// One plain-language line at the foot of the section, like the schedule's:
+    /// what will happen, and — since detection is invisible until it holds a
+    /// break — what it sees right now.
+    private var summary: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            if model.meetingInProgress != nil {
+                Image(systemName: "video.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text(summaryText)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var delaySection: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Detection delay").font(.subheadline.weight(.medium))
-                Text("How long the mic has to stay busy before it counts.")
+                Text("How long the signal has to hold before it counts.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -89,29 +118,34 @@ struct MeetingSettingsView: View {
     }
 
     private var cameraToggle: some View {
-        Toggle(isOn: binding(\.countsCamera)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count camera use too").font(.subheadline.weight(.medium))
-                Text("Keeps you covered while muted but on video.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+        SettingsToggleRow(
+            "Count camera use too",
+            detail: "Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.",
+            isOn: binding(\.countsCamera)
+        )
+    }
+
+    /// The weakest signal stays out of the way, like the per-day hours in the
+    /// schedule section: one quiet row, and the toggle only exists once it is
+    /// open.
+    private var listenOnlySection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsDisclosureButton("Also detect listen-only calls", isExpanded: $isShowingListenOnly)
+
+            if isShowingListenOnly {
+                audioOutputToggle
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .toggleStyle(.switch)
     }
 
     /// Off by default, and honest about the cost of turning it on.
     private var audioOutputToggle: some View {
-        Toggle(isOn: binding(\.countsAudioOutput)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Count audio playing too").font(.subheadline.weight(.medium))
-                Text("Catches listen-only calls. May also pause for videos and notification sounds.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Count audio playing too",
+            detail: "Catches listen-only calls. May also pause for videos and notification sounds.",
+            isOn: binding(\.countsAudioOutput)
+        )
     }
 
     // MARK: Data
@@ -122,15 +156,26 @@ struct MeetingSettingsView: View {
         model.installedApps.matches(query, excluding: settings.apps)
     }
 
-    private var appsFootnote: String {
-        guard !settings.apps.isEmpty else {
-            return "No apps chosen, so nothing will be detected as a meeting."
+    private var summaryText: String {
+        guard settings.isEnabled else { return "Reminders run through calls." }
+        guard !settings.apps.isEmpty else { return "No apps chosen, so calls won't hold reminders." }
+        if let meeting = model.meetingInProgress {
+            return "\(meeting.app.name) is on a call. Reminders are held until it ends."
         }
-        return "Detected from real microphone and camera use — not from which app is in front."
+        return "Not in a meeting right now. Calls in \(chosenAppNames) will hold reminders."
+    }
+
+    /// "Zoom, Slack and FaceTime", or "Zoom, Microsoft Teams and 4 other apps"
+    /// once the list would run long.
+    private var chosenAppNames: String {
+        let names = settings.apps.map(\.name)
+        guard names.count > 3 else { return names.formatted(.list(type: .and)) }
+        return (names.prefix(2) + ["\(names.count - 2) other apps"]).formatted(.list(type: .and))
     }
 
     private static func label(for delay: TimeInterval) -> String {
-        delay == 0 ? "Immediately" : "\(Int(delay)) sec"
+        if delay == 0 { return "Immediately" }
+        return delay < 60 ? "\(Int(delay)) sec" : "\(Int(delay / 60)) min"
     }
 
     private func edit(_ change: (inout MeetingSettings) -> Void) {

@@ -6,9 +6,9 @@ import SwiftUI
 /// sections above it, so the panel reads as one thing.
 struct AppPauseSettingsView: View {
     let model: AppModel
-    /// Owned by `SettingsView`, which needs to be able to clear it when a
-    /// click lands anywhere else in the panel.
-    @FocusState.Binding var isSearching: Bool
+    /// Cleared by the window whenever it takes the keyboard back — Esc, or a
+    /// click anywhere that is not a field — so the results list never sticks.
+    @FocusState private var isSearching: Bool
 
     @State private var query = ""
 
@@ -33,16 +33,12 @@ struct AppPauseSettingsView: View {
     // MARK: Sections
 
     private var header: some View {
-        Toggle(isOn: binding(\.isEnabled)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Pause reminders in certain apps").font(.headline)
-                Text("Holds the popup while one of the apps below is the app you're in.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .toggleStyle(.switch)
+        SettingsToggleRow(
+            "Pause reminders in certain apps",
+            detail: "Holds the popup while one of the apps below is the app you're in.",
+            prominence: .section,
+            isOn: binding(\.isEnabled)
+        )
     }
 
     private var appsSection: some View {
@@ -53,12 +49,16 @@ struct AppPauseSettingsView: View {
                 query: $query,
                 isSearching: $isSearching,
                 results: results,
+                isLoadingResults: !model.installedApps.isLoaded,
+                focusRegion: "pauseApps",
                 add: { app in
                     edit { $0.add(app) }
                     query = ""
                 },
                 remove: { bundleID in edit { $0.remove(bundleID) } }
             )
+            // The results dropdown hangs below the field, over the footnote.
+            .zIndex(1)
             Text(appsFootnote)
                 .font(.footnote)
                 .foregroundStyle(.secondary)

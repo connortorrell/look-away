@@ -4,45 +4,82 @@ import SwiftUI
 
 /// The app picker shared by the two lists in the settings panel: the meeting
 /// apps and the apps that pause reminders on their own. Chosen apps show as
-/// removable chips over a search field, with the matching installed apps
-/// listed underneath while the field is in use.
+/// removable chips over a search field, with the matching installed apps in a
+/// dropdown underneath while the field is in use.
 
+/// The chosen apps as removable chips over a search field, with the matching
+/// installed apps listed underneath while the field is in use.
 struct AppTokenField: View {
     let apps: [ChosenApp]
     @Binding var query: String
     @FocusState.Binding var isSearching: Bool
     let results: [InstalledApp]
+    /// The installed-apps scan has not finished, so an empty `results` means
+    /// "not yet" rather than "no match".
+    let isLoadingResults: Bool
+    /// Names this field's frames in the window's click guard. Two fields share
+    /// one panel, so each needs its own entry or the second overwrites the
+    /// first and clicks in it start blurring the field.
+    let focusRegion: String
     let add: (ChosenApp) -> Void
     let remove: (String) -> Void
+    @Environment(ClickFocusGuard.self) private var focusGuard
+    /// Height of the chips-and-field box, which is where the dropdown hangs from.
+    @State private var fieldHeight: CGFloat = 0
+    /// Height the result rows would like; the list scrolls once it is capped.
+    @State private var resultsHeight: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                if !apps.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(apps) { app in
-                            AppChip(app: app, remove: { remove(app.bundleID) })
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            if !apps.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(apps) { app in
+                        AppChip(app: app, remove: { remove(app.bundleID) })
                     }
                 }
-                searchField
             }
-            .padding(8)
-
+            searchField
+        }
+        .padding(8)
+        .background(fieldBackground(lit: isSearching))
+        // The results float over whatever is below rather than pushing it
+        // down: opening and closing the list then moves nothing else in the
+        // panel, so a switch clicked while the list is open is still under
+        // the pointer when the mouse comes back up.
+        .overlay(alignment: .top) {
             if isSearching {
-                Divider()
-                resultList
+                resultsDropdown
+                    .offset(y: fieldHeight + 4)
+                    .transition(.opacity)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .textBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSearching ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
-        )
         .animation(.snappy(duration: 0.15), value: isSearching)
+        // A click anywhere in here — a result, a chip, the field — keeps the
+        // field focused, so several apps can be added in a row and a result
+        // is still where it was when the mouse comes back up.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            fieldHeight = frame.height
+            focusGuard.regions[focusRegion] = frame
+        }
+    }
+
+    private var resultsDropdown: some View {
+        resultList
+            .background(fieldBackground(lit: false))
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                focusGuard.regions[focusRegion + ".results"] = frame
+            }
+            .onDisappear { focusGuard.regions[focusRegion + ".results"] = nil }
+    }
+
+    private func fieldBackground(lit: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color(nsColor: .textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(lit ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
+            )
     }
 
     private var searchField: some View {
@@ -61,13 +98,20 @@ struct AppTokenField: View {
         }
     }
 
+    private var emptyResultsMessage: String {
+        if isLoadingResults { return "Looking for installed apps…" }
+        if query.isEmpty { return "Every installed app is already in the list." }
+        return "No app matches “\(query)”."
+    }
+
     @ViewBuilder private var resultList: some View {
         if results.isEmpty {
-            Text(query.isEmpty ? "Looking for installed apps…" : "No app matches “\(query)”.")
+            Text(emptyResultsMessage)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -76,9 +120,12 @@ struct AppTokenField: View {
                     }
                 }
                 .padding(4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { resultsHeight = $0 }
             }
-            // Tall enough to browse, short enough to leave the panel usable.
-            .frame(maxHeight: 176)
+            // A scroll view takes whatever height it is offered, so it is
+            // sized to its rows here: tall enough to browse, short enough to
+            // leave the panel usable.
+            .frame(height: min(resultsHeight, 176))
         }
     }
 }
@@ -90,19 +137,22 @@ struct AppChip: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             Text(app.name).font(.subheadline)
             Button(action: remove) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
+                    // The glyph is tiny; the target it sits in is not.
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Remove \(app.name)")
         }
         .padding(.leading, 8)
-        .padding(.trailing, 6)
-        .padding(.vertical, 4)
+        .padding(.trailing, 1)
+        .padding(.vertical, 1)
         .background(Capsule().fill(Color.primary.opacity(0.09)))
         .help(app.bundleID)
     }
