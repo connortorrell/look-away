@@ -64,7 +64,10 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
 **Pause reminders during meetings** off and nothing is watched at all.
 
 <p align="center">
-  <img src="docs/settings-meetings.png" alt="Look Away settings panel with the schedule off and meeting detection on: chips for Zoom, Microsoft Teams, Slack, Pop, Discord and FaceTime over a search field listing matching installed apps, a 15-second detection delay, camera use counted and audio playing not" width="470">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/settings-meetings-dark.png">
+    <img src="docs/settings-meetings-light.png" alt="Look Away settings panel with the schedule off and meeting detection on: chips for Zoom, Microsoft Teams, Slack, Pop, Discord and FaceTime over a search field, a 15-second detection delay, camera use counted, a collapsed row for listen-only calls, and a last line reading Not in a meeting right now" width="470">
+  </picture>
 </p>
 
 - **Apps that count as a meeting** is a list of chips over a search field. Type
