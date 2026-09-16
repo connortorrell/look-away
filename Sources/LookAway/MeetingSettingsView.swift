@@ -74,7 +74,7 @@ struct MeetingSettingsView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Detection delay").font(.subheadline.weight(.medium))
-                Text("How long the mic has to stay busy before it counts.")
+                Text("How long the signal has to hold before it counts.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -122,7 +122,8 @@ struct MeetingSettingsView: View {
     }
 
     private static func label(for delay: TimeInterval) -> String {
-        delay == 0 ? "Immediately" : "\(Int(delay)) sec"
+        if delay == 0 { return "Immediately" }
+        return delay < 60 ? "\(Int(delay)) sec" : "\(Int(delay / 60)) min"
     }
 
     private func edit(_ change: (inout MeetingSettings) -> Void) {

@@ -97,9 +97,9 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   Worth it only if you sit in listen-only calls that release the microphone
   entirely; most apps mute in software and keep it open, so they are already
   covered without this.
-- **Detection delay** is how long the microphone has to stay busy before it
-  counts, so a notification chime or a quick "can you hear me?" doesn't hold
-  anything. Once a meeting is on, a 30-second grace period keeps a spell on
+- **Detection delay** is how long the signal — microphone, camera or audio —
+  has to hold before it counts, so a notification chime or a quick "can you
+  hear me?" doesn't hold anything. Once a meeting is on, a 30-second grace period keeps a spell on
   mute — or the gap between two back-to-back calls — from letting a popup
   through. That grace is also why a break owed at the end of a call arrives
   about half a minute after you hang up rather than the instant you do. Both
