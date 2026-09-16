@@ -19,6 +19,9 @@ final class AppModel {
     private(set) var schedule: Schedule
     /// Same idea for the meeting settings.
     private(set) var meetingSettings: MeetingSettings
+    /// The meeting the monitor currently sees, if any. Stored rather than
+    /// computed so SwiftUI can watch it; the monitor itself is not observable.
+    private(set) var meetingInProgress: MeetingEvidence?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -51,10 +54,12 @@ final class AppModel {
             clock: clock
         )
         scheduler.onEvent = { [unowned self] event in self.handle(event) }
-        // Every hold or release the scheduler makes emits an event, and that
-        // event refreshes the display.
         meetings.onChange = { [unowned self] isInMeeting in
             isInMeeting ? self.scheduler.meetingDidStart() : self.scheduler.meetingDidEnd()
+            // A hold or release the scheduler makes emits an event, which
+            // refreshes the display; paused or off-schedule it makes neither,
+            // so the panel's status is refreshed here as well.
+            self.refreshMeetingStatus()
         }
     }
 
@@ -152,6 +157,12 @@ final class AppModel {
             break
         }
         refreshIcon()
+        refreshMeetingStatus()
+    }
+
+    private func refreshMeetingStatus() {
+        let current = meetings.isInMeeting ? meetings.evidence : nil
+        if current != meetingInProgress { meetingInProgress = current }
     }
 
     private func showPanel() {

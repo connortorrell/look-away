@@ -22,6 +22,8 @@ struct MeetingSettingsView: View {
                 cameraToggle.padding(.top, 14)
                 audioOutputToggle.padding(.top, 14)
             }
+
+            summary.padding(.top, 18)
         }
         .animation(.snappy(duration: 0.2), value: settings.isEnabled)
         .animation(.snappy(duration: 0.2), value: settings.apps)
@@ -61,13 +63,30 @@ struct MeetingSettingsView: View {
             )
             // The results dropdown hangs below the field, over the footnote.
             .zIndex(1)
-            Text(appsFootnote)
+            Text("Detected from real microphone and camera use — not from which app is in front.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         // And over the sections below this one.
         .zIndex(1)
+    }
+
+    /// One plain-language line at the foot of the section, like the schedule's:
+    /// what will happen, and — since detection is invisible until it holds a
+    /// break — what it sees right now.
+    private var summary: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            if model.meetingInProgress != nil {
+                Image(systemName: "video.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text(summaryText)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var delaySection: some View {
@@ -114,11 +133,21 @@ struct MeetingSettingsView: View {
         model.installedApps.matches(query, excluding: settings)
     }
 
-    private var appsFootnote: String {
-        guard !settings.apps.isEmpty else {
-            return "No apps chosen, so nothing will be detected as a meeting."
+    private var summaryText: String {
+        guard settings.isEnabled else { return "Reminders run through calls." }
+        guard !settings.apps.isEmpty else { return "No apps chosen, so calls won't hold reminders." }
+        if let meeting = model.meetingInProgress {
+            return "\(meeting.app.name) is on a call. Reminders are held until it ends."
         }
-        return "Detected from real microphone and camera use — not from which app is in front."
+        return "Not in a meeting right now. Calls in \(chosenAppNames) will hold reminders."
+    }
+
+    /// "Zoom, Slack and FaceTime", or "Zoom, Microsoft Teams and 4 other apps"
+    /// once the list would run long.
+    private var chosenAppNames: String {
+        let names = settings.apps.map(\.name)
+        guard names.count > 3 else { return names.formatted(.list(type: .and)) }
+        return (names.prefix(2) + ["\(names.count - 2) other apps"]).formatted(.list(type: .and))
     }
 
     private static func label(for delay: TimeInterval) -> String {

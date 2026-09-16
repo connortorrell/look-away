@@ -122,6 +122,10 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   during the call — being on a call is the more useful thing to be told, and
   the delay's own deadline becomes the one the meeting owes. **Take a Break
   Now** still works, and pausing from the menu still outranks detection.
+- The panel's last line says what detection sees right now — "Not in a
+  meeting right now" with the apps that count, or "Zoom is on a call.
+  Reminders are held until it ends." — so you can tell at a glance whether a
+  call is being picked up, and by which app.
 - The schedule still wins: when the scheduled hours end mid-call the hold
   hands over to the schedule, and nothing is owed when the call ends. The same
   goes for a break you took by hand outside the hours and then delayed during
