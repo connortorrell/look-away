@@ -36,6 +36,13 @@ struct MeetingAppMatchingTests {
 
     /// Arc ships as `company.thebrowser.Browser` but captures from
     /// `company.thebrowser.browser.helper`.
+    /// FaceTime.app never touches the microphone itself; the system's call
+    /// daemon does, for FaceTime and for iPhone calls taken on the Mac.
+    @Test func matchesFaceTimesCallDaemon() {
+        let facetime = MeetingApp.preset(for: "com.apple.FaceTime")!
+        #expect(facetime.matches(processBundleID: "com.apple.avconferenced"))
+    }
+
     @Test func matchesRegardlessOfCase() {
         let arc = MeetingApp(bundleID: "company.thebrowser.Browser", name: "Arc")
         #expect(arc.matches(processBundleID: "company.thebrowser.browser.helper"))
@@ -354,6 +361,19 @@ struct MeetingSettingsTests {
         let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
         #expect(app.attributesCamera)
         #expect(app.extraPrefixes == ["us.zoom."])
+    }
+
+    /// A chip seeded before its preset learned about a sibling process has an
+    /// empty prefix list on disk; reading it back fills the list in, so the fix
+    /// reaches installs that already have the app chosen.
+    @Test func anAppSavedWithoutPrefixesPicksUpThePresetsOnLoad() throws {
+        let saved = #"{"bundleID":"com.apple.FaceTime","name":"FaceTime","extraPrefixes":[]}"#
+        let app = try JSONDecoder().decode(MeetingApp.self, from: Data(saved.utf8))
+        #expect(app.matches(processBundleID: "com.apple.avconferenced"))
+
+        // An app with no preset keeps its empty list; nothing is invented.
+        let unknown = #"{"bundleID":"com.acme.meet","name":"Acme Meet"}"#
+        #expect(try JSONDecoder().decode(MeetingApp.self, from: Data(unknown.utf8)).extraPrefixes.isEmpty)
     }
 
     @Test func appsAreNotAddedTwice() {

@@ -122,11 +122,12 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   hands over to the schedule, and nothing is owed when the call ends.
 
 Capture processes don't always share their app's bundle ID — Zoom captures from
-`us.zoom.caphost` alongside `us.zoom.xos`, and Electron apps capture from a
-nested helper — so each app carries the ID patterns that belong to it.
-Chromium browsers are matched through their helper; Safari hands capture to a
-shared WebKit process that doesn't say which browser it came from, so that one
-entry covers any WebKit browser.
+`us.zoom.caphost` alongside `us.zoom.xos`, Electron apps capture from a nested
+helper, and FaceTime (like an iPhone call answered on the Mac) captures from the
+system's call daemon, `com.apple.avconferenced` — so each app carries the ID
+patterns that belong to it. Chromium browsers are matched through their helper;
+Safari hands capture to a shared WebKit process that doesn't say which browser
+it came from, so that one entry covers any WebKit browser.
 
 ## Install
 

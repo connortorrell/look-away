@@ -35,13 +35,17 @@ public struct MeetingApp: Codable, Equatable, Hashable, Identifiable, Sendable {
     }
 
     /// Settings saved before an app carried a camera rule have no key for it;
-    /// they decode as counting, which is what they did at the time.
+    /// they decode as counting, which is what they did at the time. An app
+    /// saved with no prefixes of its own picks up whatever its preset has
+    /// learned since — a FaceTime chip seeded before its call daemon was known
+    /// would otherwise never match.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         bundleID = try container.decode(String.self, forKey: .bundleID)
         name = try container.decode(String.self, forKey: .name)
-        extraPrefixes = try container.decodeIfPresent([String].self, forKey: .extraPrefixes) ?? []
         attributesCamera = try container.decodeIfPresent(Bool.self, forKey: .attributesCamera) ?? true
+        let saved = try container.decodeIfPresent([String].self, forKey: .extraPrefixes) ?? []
+        extraPrefixes = saved.isEmpty ? MeetingApp.preset(for: bundleID)?.extraPrefixes ?? [] : saved
     }
 
     /// Whether a process's bundle ID belongs to this app. Compared
@@ -68,7 +72,9 @@ public extension MeetingApp {
         MeetingApp(bundleID: "com.tinyspeck.slackmacgap", name: "Slack"),
         MeetingApp(bundleID: "com.pop.pop.app", name: "Pop", extraPrefixes: ["com.pop."]),
         MeetingApp(bundleID: "com.hnc.Discord", name: "Discord"),
-        MeetingApp(bundleID: "com.apple.FaceTime", name: "FaceTime"),
+        // FaceTime — and an iPhone call answered on the Mac — captures from
+        // the system's call daemon, not from FaceTime.app itself.
+        MeetingApp(bundleID: "com.apple.FaceTime", name: "FaceTime", extraPrefixes: ["com.apple.avconferenced"]),
         MeetingApp(bundleID: "Cisco-Systems.Spark", name: "Webex", extraPrefixes: ["com.webex."]),
         // Browsers count for the microphone — a Meet tab holding the mic is
         // a call — but not for the camera, since one is nearly always open.
