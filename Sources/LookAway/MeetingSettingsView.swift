@@ -11,6 +11,13 @@ struct MeetingSettingsView: View {
     @FocusState private var isSearching: Bool
 
     @State private var query = ""
+    /// Opens with the listen-only option showing whenever it is switched on.
+    @State private var isShowingListenOnly: Bool
+
+    init(model: AppModel) {
+        self.model = model
+        _isShowingListenOnly = State(initialValue: model.meetingSettings.countsAudioOutput)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -20,13 +27,14 @@ struct MeetingSettingsView: View {
                 appsSection.padding(.top, 20)
                 delaySection.padding(.top, 20)
                 cameraToggle.padding(.top, 14)
-                audioOutputToggle.padding(.top, 14)
+                listenOnlySection.padding(.top, 16)
             }
 
             summary.padding(.top, 18)
         }
         .animation(.snappy(duration: 0.2), value: settings.isEnabled)
         .animation(.snappy(duration: 0.2), value: settings.apps)
+        .animation(.snappy(duration: 0.2), value: isShowingListenOnly)
         .onAppear { model.prepareMeetingSettings() }
         // Leaving the field puts it back to its placeholder, so clicking in
         // again never opens onto a stale search.
@@ -114,6 +122,20 @@ struct MeetingSettingsView: View {
             detail: "Keeps you covered while muted but on video in a meeting app. Browsers are left out, so a website using the camera doesn't count.",
             isOn: binding(\.countsCamera)
         )
+    }
+
+    /// The weakest signal stays out of the way, like the per-day hours in the
+    /// schedule section: one quiet row, and the toggle only exists once it is
+    /// open.
+    private var listenOnlySection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsDisclosureButton("Also detect listen-only calls", isExpanded: $isShowingListenOnly)
+
+            if isShowingListenOnly {
+                audioOutputToggle
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
     }
 
     /// Off by default, and honest about the cost of turning it on.

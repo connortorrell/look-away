@@ -107,19 +107,7 @@ struct SettingsView: View {
     @ViewBuilder private var customizeSection: some View {
         if !schedule.activeDays.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
-                Button {
-                    isCustomizingDays.toggle()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.right")
-                            .font(.caption2.weight(.bold))
-                            .rotationEffect(.degrees(isCustomizingDays ? 90 : 0))
-                        Text("Different hours on some days")
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
+                SettingsDisclosureButton("Different hours on some days", isExpanded: $isCustomizingDays)
 
                 if isCustomizingDays {
                     VStack(spacing: 6) {
@@ -336,6 +324,34 @@ struct SettingsToggleRow: View {
                 .labelsHidden()
                 .accessibilityLabel(title)
         }
+    }
+}
+
+/// The quiet way into an optional part of a section: a chevron and a line of
+/// text. Whatever it reveals should only exist once it is open.
+struct SettingsDisclosureButton: View {
+    let title: String
+    @Binding var isExpanded: Bool
+
+    init(_ title: String, isExpanded: Binding<Bool>) {
+        self.title = title
+        _isExpanded = isExpanded
+    }
+
+    var body: some View {
+        Button {
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                Text(title)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
     }
 }
 

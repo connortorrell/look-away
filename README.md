@@ -90,7 +90,8 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   while playing audio: one is playing something most of the day, so a
   website using the camera would otherwise read as a meeting. They still
   count for the microphone, where the process is named.
-- **Count audio playing too** is off by default and best left that way. Audio
+- **Count audio playing too**, tucked behind *Also detect listen-only calls*,
+  is off by default and best left that way. Audio
   coming *out* of an app is a weak signal — a YouTube video, a Slack ping and a
   call all look identical — and browsers and chat apps are in the list above,
   so switching it on will sometimes hold reminders during ordinary browsing.
