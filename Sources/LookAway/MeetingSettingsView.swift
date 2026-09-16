@@ -59,11 +59,15 @@ struct MeetingSettingsView: View {
                 },
                 remove: { bundleID in edit { $0.remove(bundleID) } }
             )
+            // The results dropdown hangs below the field, over the footnote.
+            .zIndex(1)
             Text(appsFootnote)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // And over the sections below this one.
+        .zIndex(1)
     }
 
     private var delaySection: some View {
@@ -149,35 +153,63 @@ private struct AppTokenField: View {
     let isLoadingResults: Bool
     let add: (MeetingApp) -> Void
     let remove: (String) -> Void
+    @Environment(ClickFocusGuard.self) private var focusGuard
+    /// Height of the chips-and-field box, which is where the dropdown hangs from.
+    @State private var fieldHeight: CGFloat = 0
+    /// Height the result rows would like; the list scrolls once it is capped.
+    @State private var resultsHeight: CGFloat = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                if !apps.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(apps) { app in
-                            AppChip(app: app, remove: { remove(app.bundleID) })
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            if !apps.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(apps) { app in
+                        AppChip(app: app, remove: { remove(app.bundleID) })
                     }
                 }
-                searchField
             }
-            .padding(8)
-
+            searchField
+        }
+        .padding(8)
+        .background(fieldBackground(lit: isSearching))
+        // The results float over whatever is below rather than pushing it
+        // down: opening and closing the list then moves nothing else in the
+        // panel, so a switch clicked while the list is open is still under
+        // the pointer when the mouse comes back up.
+        .overlay(alignment: .top) {
             if isSearching {
-                Divider()
-                resultList
+                resultsDropdown
+                    .offset(y: fieldHeight + 4)
+                    .transition(.opacity)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(nsColor: .textBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isSearching ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
-        )
         .animation(.snappy(duration: 0.15), value: isSearching)
+        // A click anywhere in here — a result, a chip, the field — keeps the
+        // field focused, so several apps can be added in a row and a result
+        // is still where it was when the mouse comes back up.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+            fieldHeight = frame.height
+            focusGuard.regions["apps"] = frame
+        }
+    }
+
+    private var resultsDropdown: some View {
+        resultList
+            .background(fieldBackground(lit: false))
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                focusGuard.regions["appResults"] = frame
+            }
+            .onDisappear { focusGuard.regions["appResults"] = nil }
+    }
+
+    private func fieldBackground(lit: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(Color(nsColor: .textBackgroundColor))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(lit ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: 1)
+            )
     }
 
     private var searchField: some View {
@@ -209,6 +241,7 @@ private struct AppTokenField: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -217,9 +250,12 @@ private struct AppTokenField: View {
                     }
                 }
                 .padding(4)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { resultsHeight = $0 }
             }
-            // Tall enough to browse, short enough to leave the panel usable.
-            .frame(maxHeight: 176)
+            // A scroll view takes whatever height it is offered, so it is
+            // sized to its rows here: tall enough to browse, short enough to
+            // leave the panel usable.
+            .frame(height: min(resultsHeight, 176))
         }
     }
 }

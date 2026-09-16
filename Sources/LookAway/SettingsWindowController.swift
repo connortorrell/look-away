@@ -12,6 +12,7 @@ final class SettingsWindowController {
     private static let minimumHeight: CGFloat = 320
 
     private let model: AppModel
+    private let focusGuard = ClickFocusGuard()
     private var window: SettingsWindow?
     /// The monitor lives as long as the controller does, which is as long as
     /// the app does, so there is no teardown to do. Kept in a property only so
@@ -34,7 +35,7 @@ final class SettingsWindowController {
     }
 
     private func makeWindow() -> SettingsWindow {
-        let hosting = NSHostingController(rootView: SettingsView(model: model))
+        let hosting = NSHostingController(rootView: SettingsView(model: model).environment(focusGuard))
         // The window owns its size: the panel scrolls, so the content's own
         // size is not the one to fit to, and a legacy scroll bar would
         // otherwise widen the window past the width the content asked for.
@@ -86,11 +87,22 @@ final class SettingsWindowController {
     }
 
     private func clickLandedOnAField(_ event: NSEvent) -> Bool {
+        let location = event.locationInWindow
+        // SwiftUI draws its own controls into the hosting view, so `hitTest`
+        // cannot tell a click on a search result from a click in empty space.
+        // The views that must keep the keyboard through a click report their
+        // own frames instead. SwiftUI's global space is the window frame with
+        // the origin at the top left, titlebar included, so the click is
+        // flipped against the frame's height to compare.
+        if let window, let frameView = window.contentView?.superview {
+            let clickInSwiftUISpace = CGPoint(x: location.x, y: frameView.bounds.height - location.y)
+            if focusGuard.regions.values.contains(where: { $0.contains(clickInSwiftUISpace) }) { return true }
+        }
         // `hitTest` takes a point in the receiver's *superview* coordinates,
         // and for the content view those are window coordinates — so the
         // location goes in as-is. Converting it first misses by the content
         // view's origin and reports every click as having hit nothing.
-        guard let hit = window?.contentView?.hitTest(event.locationInWindow) else { return false }
+        guard let hit = window?.contentView?.hitTest(location) else { return false }
         // The field, its editor, and the stepper beside it are all one field
         // as far as the user is concerned.
         var view: NSView? = hit
@@ -102,6 +114,19 @@ final class SettingsWindowController {
         }
         return false
     }
+}
+
+/// Where in the panel a click should *not* take the keyboard away.
+///
+/// The app search field keeps its results open only while it has focus, and a
+/// click on a result has to reach the row with the list still up and unchanged
+/// — so the field and its dropdown each report their frame, and the window's
+/// click monitor leaves clicks inside either alone. Frames are in SwiftUI's
+/// global space.
+@MainActor
+@Observable
+final class ClickFocusGuard {
+    var regions: [String: CGRect] = [:]
 }
 
 /// With no main menu there is no File > Close, so Esc and ⌘W are handled here.
