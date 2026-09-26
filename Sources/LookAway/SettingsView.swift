@@ -1,9 +1,10 @@
 import SwiftUI
 import LookAwayCore
 
-/// The settings panel: when reminders are allowed to fire, and when they
-/// should get out of the way. Every section is opt-in and stays collapsed to
-/// a single toggle until switched on, so the panel opens quiet.
+/// The settings panel: when reminders are allowed to fire, when they should
+/// get out of the way, and what the popup gives you to think on. Every section
+/// is opt-in and stays collapsed to a single toggle until switched on, so the
+/// panel opens quiet.
 struct SettingsView: View {
     /// The window's content width: wide enough for a row of app chips to read
     /// well. The content fills whatever is left of it beside the scroll bar.
@@ -13,7 +14,7 @@ struct SettingsView: View {
     @State private var isCustomizingDays: Bool
 
     /// The sections that can be switched on, and so can open below the fold.
-    private enum PanelSection: Hashable { case meetings, apps }
+    private enum PanelSection: Hashable { case meetings, apps, verses }
 
     /// Opens with the per-day list showing whenever there is something in it.
     init(model: AppModel) {
@@ -32,6 +33,9 @@ struct SettingsView: View {
                     Divider().padding(.vertical, 20)
                     AppPauseSettingsView(model: model)
                         .id(PanelSection.apps)
+                    Divider().padding(.vertical, 20)
+                    VerseSettingsView(model: model)
+                        .id(PanelSection.verses)
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -43,6 +47,9 @@ struct SettingsView: View {
             }
             .onChange(of: model.appPauseSettings.isEnabled) { _, isOn in
                 if isOn { reveal(.apps, in: proxy) }
+            }
+            .onChange(of: model.verseSettings.isEnabled) { _, isOn in
+                if isOn { reveal(.verses, in: proxy) }
             }
             .animation(.snappy(duration: 0.2), value: schedule.isEnabled)
             .animation(.snappy(duration: 0.2), value: isCustomizingDays)

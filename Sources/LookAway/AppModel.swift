@@ -27,6 +27,11 @@ final class AppModel {
     /// The chosen app the monitor currently sees in front, if any. Stored for
     /// the same reason as `meetingInProgress`.
     private(set) var appInFront: ChosenApp?
+    /// And for the verse shown during breaks.
+    private(set) var verseSettings: VerseSettings
+    /// The verse the current break shows, chosen when it starts so an edit
+    /// made mid-break doesn't swap it out from under the reader.
+    private(set) var currentVerse: Verse?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -35,6 +40,7 @@ final class AppModel {
     private let scheduleStore: ScheduleStoring
     private let meetingStore: MeetingSettingsStoring
     private let appPauseStore: AppPauseSettingsStoring
+    private let verseStore: VerseSettingsStoring
     private let meetings: MeetingMonitor
     private let focusedApps: FocusedAppMonitor
     private var panel: BreakPanelController?
@@ -44,12 +50,14 @@ final class AppModel {
         config: Config = .standard,
         scheduleStore: ScheduleStoring = UserDefaultsScheduleStore(),
         meetingStore: MeetingSettingsStoring = UserDefaultsMeetingSettingsStore(),
-        appPauseStore: AppPauseSettingsStoring = UserDefaultsAppPauseSettingsStore()
+        appPauseStore: AppPauseSettingsStoring = UserDefaultsAppPauseSettingsStore(),
+        verseStore: VerseSettingsStoring = UserDefaultsVerseSettingsStore()
     ) {
         self.config = config
         self.scheduleStore = scheduleStore
         self.meetingStore = meetingStore
         self.appPauseStore = appPauseStore
+        self.verseStore = verseStore
         let clock = SystemTimekeeper()
         self.clock = clock
         let schedule = scheduleStore.load()
@@ -58,6 +66,7 @@ final class AppModel {
         self.meetingSettings = meetingSettings
         let appPauseSettings = appPauseStore.load()
         self.appPauseSettings = appPauseSettings
+        verseSettings = verseStore.load()
         scheduler = BreakScheduler(config: config, schedule: schedule, clock: clock)
         meetings = MeetingMonitor(
             settings: meetingSettings,
@@ -144,6 +153,14 @@ final class AppModel {
         focusedApps.apply(settings: settings)
     }
 
+    /// Single write path for verse edits. Nothing needs re-applying: the next
+    /// break reads the settings when it starts.
+    func updateVerseSettings(_ settings: VerseSettings) {
+        guard settings != verseSettings else { return }
+        verseSettings = settings
+        verseStore.save(settings)
+    }
+
     /// Called when the settings panel opens. Fills an untouched app list with
     /// the meeting apps actually installed, so switching the feature on does
     /// something sensible without the user picking anything first.
@@ -185,13 +202,24 @@ final class AppModel {
             cancelDoneHide()
             breakPhase = .counting
             remainingSeconds = config.breakSeconds
+            // Before the panel shows, so it sizes itself around the verse.
+            currentVerse = verseSettings.verse(on: clock.now())
             showPanel()
         case .countdownTicked(let remaining):
             remainingSeconds = remaining
         case .breakCompleted:
             breakPhase = .done
             Sound.playChime()
-            doneHide = clock.schedule(after: 1.2) { [weak self] in self?.panel?.hide() }
+            // Only a finished break moves your own verses on; a delayed or
+            // declined one brings the same verse back next time.
+            if verseSettings.isRotating {
+                var settings = verseSettings
+                settings.advance()
+                updateVerseSettings(settings)
+            }
+            // A verse gets a moment to be re-read before the popup goes.
+            let linger = currentVerse == nil ? 1.2 : VerseSettings.doneLinger
+            doneHide = clock.schedule(after: linger) { [weak self] in self?.panel?.hide() }
         case .breakDismissed:
             cancelDoneHide()
             panel?.hide()

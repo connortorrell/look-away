@@ -192,6 +192,42 @@ Both lists can hold at once — a call taken with a game still up — and the po
 waits for the last of them to lift. The menu names the meeting while there is
 one, since that is the hold with an end somebody else decides.
 
+## Verses
+
+Twenty seconds of looking away is also twenty seconds to think on something.
+Switch on **Show a verse during breaks** and the popup carries a verse under the
+countdown. Opt-in like the rest; left off, the popup is exactly as above.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/settings-verses-dark.png">
+    <img src="docs/settings-verses-light.png" alt="Look Away settings panel with Show a verse during breaks on and My verses chosen: three verses listed with Psalm 46:10 marked Next, a form to type or paste a verse with an optional reference and a 0/280 count, and a last line reading The next break shows Psalm 46:10, then moves on once it finishes" width="470">
+  </picture>
+</p>
+
+- **Read, then look away.** Reading keeps your eyes on the screen, which is the
+  opposite of the point, so the verse is only at full strength for the first 5
+  seconds, under "Read, then look away and meditate". It then dims while the
+  countdown runs — still there if you glance back — and returns in full at
+  Done, when the popup stays up 4 seconds instead of the usual moment.
+- **Verse of the day** is built in: 430 short verses from the Berean Standard
+  Bible, one per day and the same one at every break that day. No network is
+  involved. The BSB has been dedicated to the public domain.
+- **My verses** is your own list, in any translation: paste the text, add a
+  reference if you like. Breaks step through it one verse per break, in order,
+  and keep their place across restarts. Only a finished break moves on; a
+  delayed or declined one brings the same verse back. Drag to reorder, or use
+  each row's menu. Past 280 characters the count turns orange, since a long
+  verse is hard to take in at a glance, but it is still saved and shown. An
+  empty list falls back to the verse of the day.
+
+The built-in list lives in `scripts/daily-verse-references.txt`, one reference
+per line in the order the days take them. `make verses` regenerates
+`Sources/LookAwayCore/DailyVerses+All.swift` from the official BSB text, so no
+verse is ever typed by hand. It closes a quotation the cut leaves open, drops a
+stray closing mark, leaves out "Selah", and refuses the list if a reference is
+unknown or repeated or a verse runs past 280 characters.
+
 ## Install
 
 There is no prebuilt download. You build the app yourself, which takes about a
@@ -242,13 +278,14 @@ to the Trash. If Launch at Login was on, macOS removes the login item with it.
 | `make test`    | Runs the scheduler unit tests                  |
 | `make run`     | Builds and launches from `./build` (dev loop)  |
 | `make bundle`  | Builds the `.app` without launching            |
+| `make verses`  | Regenerates the verse of the day list from the BSB |
 | `make clean`   | Removes build output                           |
 
 ## Layout
 
 - `Sources/LookAwayCore` — pure Foundation: `Config`, the `Timekeeper` clock
-  abstraction, the `Schedule`, `MeetingSettings` and `AppPauseSettings` models
-  and their storage, the `MeetingMonitor` and `FocusedAppMonitor` detectors
+  abstraction, the `Schedule`, `MeetingSettings`, `AppPauseSettings` and
+  `VerseSettings` models and their storage, the built-in `DailyVerses`, the `MeetingMonitor` and `FocusedAppMonitor` detectors
   on one shared `DebouncedMonitor`, and the `BreakScheduler` state machine.
   Both detectors report to the same hold on the scheduler, which keeps the
   popup back until the last one lifts.
@@ -256,6 +293,7 @@ to the Trash. If Launch at Login was on, macOS removes the login item with it.
   break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
   frontmost-app probe and the installed-apps scan, sleep/lock observers,
   launch-at-login.
-- `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection and
-  app-detection tests, driven by a fake clock, a fake device probe and a fake
+- `scripts` — the verse of the day list and its generator.
+- `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection,
+  app-detection and verse tests, driven by a fake clock, a fake device probe and a fake
   frontmost-app probe.
