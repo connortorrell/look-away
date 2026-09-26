@@ -25,11 +25,13 @@ public enum VerseSource: String, Codable, Sendable, CaseIterable {
 /// A verse to meditate on while looking away.
 ///
 /// Opt-in, like every other setting: while `isEnabled` is false the popup is
-/// exactly what it always was. The verse is meant to be read in the first
-/// moments and then carried away from the screen, so the popup dims it once
-/// `readingTime` has passed and brings it back when the break is done.
+/// exactly what it always was. The verse is meant to be read first and then
+/// carried away from the screen, so the break opens with `readingTime` for
+/// reading before its countdown starts, dims the verse while the countdown
+/// runs, and brings it back when the break is done.
 public struct VerseSettings: Codable, Equatable, Sendable {
-    /// Seconds the verse is shown at full strength before it dims.
+    /// Seconds for reading the verse before the countdown starts. Added to the
+    /// break, so the whole countdown is still spent looking away.
     public static let readingTime = 5
     /// How long the finished popup stays up when it has a verse to re-read,
     /// in place of the usual brief "Done".

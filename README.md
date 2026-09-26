@@ -206,10 +206,12 @@ countdown. Opt-in like the rest; left off, the popup is exactly as above.
 </p>
 
 - **Read, then look away.** Reading keeps your eyes on the screen, which is the
-  opposite of the point, so the verse is only at full strength for the first 5
-  seconds, under "Read, then look away and meditate". It then dims while the
-  countdown runs — still there if you glance back — and returns in full at
-  Done, when the popup stays up 4 seconds instead of the usual moment.
+  opposite of the point, so the break opens with 5 seconds for reading, under
+  "Read, then look away and meditate", before its countdown starts. The
+  reading time is added to the break rather than taken out of it, so all 20
+  seconds of the countdown are still spent looking away. The verse then dims
+  while the countdown runs — still there if you glance back — and returns in
+  full at Done, when the popup stays up 4 seconds instead of the usual moment.
 - **Verse of the day** is built in: 430 short verses from the Berean Standard
   Bible, one per day and the same one at every break that day. No network is
   involved. The BSB has been dedicated to the public domain.

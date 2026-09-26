@@ -278,4 +278,84 @@ struct BreakSchedulerTests {
         #expect(scheduler.state == .breaking(remaining: 3))
         #expect(events.all.isEmpty)
     }
+
+    // MARK: Reading lead-in
+
+    @Test func noLeadInByDefault() {
+        scheduler.start()
+        clock.advance(by: 100)
+        clock.advance(by: 5)
+        #expect(!events.all.contains(.countdownStarted))
+        #expect(scheduler.state == .idle(fireAt: date(205)))
+    }
+
+    @Test func leadInHoldsTheFullCountdownBackThenRunsIt() {
+        scheduler.readingSeconds = 3
+        scheduler.start()
+        clock.advance(by: 100)
+        #expect(events.all.last == .breakStarted)
+        events.clear()
+
+        clock.advance(by: 2.9)
+        #expect(scheduler.state == .breaking(remaining: 5))
+        #expect(events.all.isEmpty)
+
+        clock.advance(by: 0.1)
+        #expect(events.all == [.countdownStarted])
+        #expect(scheduler.state == .breaking(remaining: 5))
+
+        clock.advance(by: 1)
+        #expect(events.all.last == .countdownTicked(remaining: 4))
+        clock.advance(by: 4)
+        #expect(events.all.suffix(3) == [.countdownTicked(remaining: 0), .breakCompleted, .scheduleChanged])
+        // The whole countdown ran after the lead-in: closed at 108, not 105.
+        #expect(scheduler.state == .idle(fireAt: date(208)))
+    }
+
+    @Test func snoozeDuringTheLeadInCancelsItAndReturnsWithAnother() {
+        scheduler.readingSeconds = 3
+        scheduler.start()
+        clock.advance(by: 101)
+        scheduler.snooze()
+        #expect(scheduler.state == .snoozed(until: date(111)))
+        events.clear()
+        clock.advance(by: 5)
+        #expect(events.all.isEmpty)
+        clock.advance(by: 5)
+        #expect(events.all == [.breakStarted])
+        clock.advance(by: 3)
+        #expect(events.all == [.breakStarted, .countdownStarted])
+    }
+
+    @Test func declineDuringTheLeadInReArmsWithoutACountdown() {
+        scheduler.readingSeconds = 3
+        scheduler.start()
+        clock.advance(by: 101)
+        scheduler.decline()
+        #expect(scheduler.state == .idle(fireAt: date(201)))
+        events.clear()
+        clock.advance(by: 50)
+        #expect(events.all.isEmpty)
+    }
+
+    @Test func pauseDuringTheLeadInDismissesAndCancelsIt() {
+        scheduler.readingSeconds = 3
+        scheduler.start()
+        clock.advance(by: 101)
+        events.clear()
+        scheduler.pause()
+        #expect(events.all == [.breakDismissed, .scheduleChanged])
+        clock.advance(by: 10)
+        #expect(!events.all.contains(.countdownStarted))
+    }
+
+    @Test func aChangedLeadInAppliesFromTheNextBreak() {
+        scheduler.start()
+        clock.advance(by: 100)
+        scheduler.readingSeconds = 3
+        // This break opened without one, so it counts straight down.
+        clock.advance(by: 5)
+        #expect(scheduler.state == .idle(fireAt: date(205)))
+        #expect(!events.all.contains(.countdownStarted))
+    }
 }

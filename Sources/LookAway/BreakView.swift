@@ -17,6 +17,9 @@ struct BreakView: View {
                 .contentTransition(.numericText(countsDown: true))
                 .animation(.snappy, value: model.remainingSeconds)
                 .frame(minHeight: 84)
+                // Waiting its turn while the verse is read.
+                .opacity(model.isReading ? VerseSettings.dimmedOpacity : 1)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: model.isReading)
 
             Text(subtitle)
                 .font(.title3)
@@ -47,24 +50,15 @@ struct BreakView: View {
         )
     }
 
-    /// The opening seconds of a break with a verse, meant for reading it.
-    /// Taken from the countdown itself, so there is no second clock to keep
-    /// in step.
-    private var isReading: Bool {
-        model.currentVerse != nil
-            && model.breakPhase == .counting
-            && model.remainingSeconds > model.config.breakSeconds - VerseSettings.readingTime
-    }
-
-    /// Dimmed, not hidden, once the reading time is up: the point is to look
+    /// Dimmed, not hidden, once the countdown starts: the point is to look
     /// away, but a glance back should still find the words.
     private var isVerseDimmed: Bool {
-        model.breakPhase == .counting && !isReading
+        model.breakPhase == .counting && !model.isReading
     }
 
     private var subtitle: String {
         if model.breakPhase == .done { return "Nice. Back to it." }
-        return isReading ? "Read, then look away and meditate" : "Look at something 20 feet away"
+        return model.isReading ? "Read, then look away and meditate" : "Look at something 20 feet away"
     }
 }
 

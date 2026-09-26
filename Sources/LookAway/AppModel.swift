@@ -12,6 +12,9 @@ final class AppModel {
     private(set) var iconName = "eye"
     private(set) var remainingSeconds = 0
     private(set) var breakPhase: BreakPhase = .counting
+    /// The opening seconds of a break with a verse, before the countdown
+    /// starts.
+    private(set) var isReading = false
     private(set) var launchAtLoginEnabled = false
     private(set) var launchAtLoginError: String?
 
@@ -66,8 +69,10 @@ final class AppModel {
         self.meetingSettings = meetingSettings
         let appPauseSettings = appPauseStore.load()
         self.appPauseSettings = appPauseSettings
-        verseSettings = verseStore.load()
+        let verseSettings = verseStore.load()
+        self.verseSettings = verseSettings
         scheduler = BreakScheduler(config: config, schedule: schedule, clock: clock)
+        scheduler.readingSeconds = Self.readingSeconds(for: verseSettings)
         meetings = MeetingMonitor(
             settings: meetingSettings,
             probe: SystemActivityProbe(),
@@ -153,12 +158,19 @@ final class AppModel {
         focusedApps.apply(settings: settings)
     }
 
-    /// Single write path for verse edits. Nothing needs re-applying: the next
-    /// break reads the settings when it starts.
+    /// Single write path for verse edits. The next break reads the settings,
+    /// and the scheduler its reading time, when it starts.
     func updateVerseSettings(_ settings: VerseSettings) {
         guard settings != verseSettings else { return }
         verseSettings = settings
         verseStore.save(settings)
+        scheduler.readingSeconds = Self.readingSeconds(for: settings)
+    }
+
+    /// A verse gets its reading time ahead of the countdown; without one the
+    /// countdown starts at once, as it always has.
+    private static func readingSeconds(for settings: VerseSettings) -> Int {
+        settings.isEnabled ? VerseSettings.readingTime : 0
     }
 
     /// Called when the settings panel opens. Fills an untouched app list with
@@ -204,7 +216,10 @@ final class AppModel {
             remainingSeconds = config.breakSeconds
             // Before the panel shows, so it sizes itself around the verse.
             currentVerse = verseSettings.verse(on: clock.now())
+            isReading = currentVerse != nil
             showPanel()
+        case .countdownStarted:
+            isReading = false
         case .countdownTicked(let remaining):
             remainingSeconds = remaining
         case .breakCompleted:
@@ -221,6 +236,7 @@ final class AppModel {
             let linger = currentVerse == nil ? 1.2 : VerseSettings.doneLinger
             doneHide = clock.schedule(after: linger) { [weak self] in self?.panel?.hide() }
         case .breakDismissed:
+            isReading = false
             cancelDoneHide()
             panel?.hide()
         case .scheduleChanged:
