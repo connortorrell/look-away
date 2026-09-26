@@ -9,7 +9,8 @@ public final class BreakScheduler {
         case stopped
         /// Waiting for the next break.
         case idle(fireAt: Date)
-        /// Popup is visible and counting down.
+        /// Popup is visible and counting down. Through a reading lead-in the
+        /// countdown has not started yet, so `remaining` is still the full break.
         case breaking(remaining: Int)
         /// Popup was delayed and will return at `until`.
         case snoozed(until: Date)
@@ -40,6 +41,9 @@ public final class BreakScheduler {
     public enum Event: Equatable, Sendable {
         /// Show the popup with a fresh countdown.
         case breakStarted
+        /// The reading lead-in is over and the countdown starts now. Only sent
+        /// for a break that opened with one.
+        case countdownStarted
         /// Countdown moved to `remaining` seconds.
         case countdownTicked(remaining: Int)
         /// Countdown reached zero.
@@ -54,6 +58,11 @@ public final class BreakScheduler {
     public private(set) var state: State = .stopped
     public private(set) var schedule: Schedule
     public var onEvent: (@MainActor (Event) -> Void)?
+    /// Seconds the popup is up before its countdown starts, for reading
+    /// something first. Added to the break rather than taken out of it, so the
+    /// full countdown is still spent looking away. Read when a break opens;
+    /// zero means the countdown starts straight away.
+    public var readingSeconds = 0
 
     private let clock: Timekeeper
     private let calendar: Calendar
@@ -333,7 +342,13 @@ public final class BreakScheduler {
         cancelPending()
         state = .breaking(remaining: config.breakSeconds)
         emit(.breakStarted)
-        scheduleTick()
+        guard readingSeconds > 0 else { return scheduleTick() }
+        // Delay, decline, a hold or a pause cancels this like any tick, since
+        // the state is already `.breaking`.
+        pending = clock.schedule(after: TimeInterval(readingSeconds)) { [weak self] in
+            self?.emit(.countdownStarted)
+            self?.scheduleTick()
+        }
     }
 
     private func scheduleTick() {

@@ -4,13 +4,16 @@ CONTENTS := $(BUNDLE)/Contents
 BINARY   := .build/release/LookAway
 INSTALL  := /Applications/$(APP).app
 
-.PHONY: build bundle run install test clean
+.PHONY: build bundle run install test verses clean
 
 build:
 	swift build -c release
 
 test:
 	swift test
+
+verses:
+	swift scripts/generate-daily-verses.swift
 
 bundle: build
 	rm -rf "$(BUNDLE)"

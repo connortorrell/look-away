@@ -12,6 +12,9 @@ final class AppModel {
     private(set) var iconName = "eye"
     private(set) var remainingSeconds = 0
     private(set) var breakPhase: BreakPhase = .counting
+    /// The opening seconds of a break with a verse, before the countdown
+    /// starts.
+    private(set) var isReading = false
     private(set) var launchAtLoginEnabled = false
     private(set) var launchAtLoginError: String?
 
@@ -27,6 +30,11 @@ final class AppModel {
     /// The chosen app the monitor currently sees in front, if any. Stored for
     /// the same reason as `meetingInProgress`.
     private(set) var appInFront: ChosenApp?
+    /// And for the verse shown during breaks.
+    private(set) var verseSettings: VerseSettings
+    /// The verse the current break shows, chosen when it starts so an edit
+    /// made mid-break doesn't swap it out from under the reader.
+    private(set) var currentVerse: Verse?
 
     let config: Config
     let installedApps = InstalledApps()
@@ -35,6 +43,7 @@ final class AppModel {
     private let scheduleStore: ScheduleStoring
     private let meetingStore: MeetingSettingsStoring
     private let appPauseStore: AppPauseSettingsStoring
+    private let verseStore: VerseSettingsStoring
     private let meetings: MeetingMonitor
     private let focusedApps: FocusedAppMonitor
     private var panel: BreakPanelController?
@@ -44,12 +53,14 @@ final class AppModel {
         config: Config = .standard,
         scheduleStore: ScheduleStoring = UserDefaultsScheduleStore(),
         meetingStore: MeetingSettingsStoring = UserDefaultsMeetingSettingsStore(),
-        appPauseStore: AppPauseSettingsStoring = UserDefaultsAppPauseSettingsStore()
+        appPauseStore: AppPauseSettingsStoring = UserDefaultsAppPauseSettingsStore(),
+        verseStore: VerseSettingsStoring = UserDefaultsVerseSettingsStore()
     ) {
         self.config = config
         self.scheduleStore = scheduleStore
         self.meetingStore = meetingStore
         self.appPauseStore = appPauseStore
+        self.verseStore = verseStore
         let clock = SystemTimekeeper()
         self.clock = clock
         let schedule = scheduleStore.load()
@@ -58,7 +69,10 @@ final class AppModel {
         self.meetingSettings = meetingSettings
         let appPauseSettings = appPauseStore.load()
         self.appPauseSettings = appPauseSettings
+        let verseSettings = verseStore.load()
+        self.verseSettings = verseSettings
         scheduler = BreakScheduler(config: config, schedule: schedule, clock: clock)
+        scheduler.readingSeconds = Self.readingSeconds(for: verseSettings)
         meetings = MeetingMonitor(
             settings: meetingSettings,
             probe: SystemActivityProbe(),
@@ -144,6 +158,21 @@ final class AppModel {
         focusedApps.apply(settings: settings)
     }
 
+    /// Single write path for verse edits. The next break reads the settings,
+    /// and the scheduler its reading time, when it starts.
+    func updateVerseSettings(_ settings: VerseSettings) {
+        guard settings != verseSettings else { return }
+        verseSettings = settings
+        verseStore.save(settings)
+        scheduler.readingSeconds = Self.readingSeconds(for: settings)
+    }
+
+    /// A verse gets its reading time ahead of the countdown; without one the
+    /// countdown starts at once, as it always has.
+    private static func readingSeconds(for settings: VerseSettings) -> Int {
+        settings.isEnabled ? VerseSettings.readingTime : 0
+    }
+
     /// Called when the settings panel opens. Fills an untouched app list with
     /// the meeting apps actually installed, so switching the feature on does
     /// something sensible without the user picking anything first.
@@ -185,14 +214,29 @@ final class AppModel {
             cancelDoneHide()
             breakPhase = .counting
             remainingSeconds = config.breakSeconds
+            // Before the panel shows, so it sizes itself around the verse.
+            currentVerse = verseSettings.verse(on: clock.now())
+            isReading = currentVerse != nil
             showPanel()
+        case .countdownStarted:
+            isReading = false
         case .countdownTicked(let remaining):
             remainingSeconds = remaining
         case .breakCompleted:
             breakPhase = .done
             Sound.playChime()
-            doneHide = clock.schedule(after: 1.2) { [weak self] in self?.panel?.hide() }
+            // Only a finished break moves your own verses on; a delayed or
+            // declined one brings the same verse back next time.
+            if verseSettings.isRotating {
+                var settings = verseSettings
+                settings.advance()
+                updateVerseSettings(settings)
+            }
+            // A verse gets a moment to be re-read before the popup goes.
+            let linger = currentVerse == nil ? 1.2 : VerseSettings.doneLinger
+            doneHide = clock.schedule(after: linger) { [weak self] in self?.panel?.hide() }
         case .breakDismissed:
+            isReading = false
             cancelDoneHide()
             panel?.hide()
         case .scheduleChanged:
