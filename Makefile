@@ -21,6 +21,12 @@ bundle: build
 	cp "$(BINARY)" "$(CONTENTS)/MacOS/LookAway"
 	cp Resources/Info.plist "$(CONTENTS)/Info.plist"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
+	# Install Updates in the menu pulls and rebuilds this checkout, and
+	# compares GitHub against the commit the app was built from.
+	if commit=$$(git rev-parse HEAD 2>/dev/null); then \
+		plutil -insert LookAwaySourceDirectory -string "$(CURDIR)" "$(CONTENTS)/Info.plist"; \
+		plutil -insert LookAwayCommit -string "$$commit" "$(CONTENTS)/Info.plist"; \
+	fi
 	codesign --force --sign - "$(BUNDLE)"
 
 run: bundle
@@ -28,7 +34,9 @@ run: bundle
 	open "$(BUNDLE)"
 
 install: bundle
-	pkill -x LookAway || true
+	# -a: when Install Updates runs this, the app to quit is our own ancestor,
+	# which pkill otherwise skips.
+	pkill -ax LookAway || true
 	rm -rf "$(INSTALL)"
 	cp -R "$(BUNDLE)" "$(INSTALL)"
 	open "$(INSTALL)"

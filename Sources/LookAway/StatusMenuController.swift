@@ -1,4 +1,5 @@
 import AppKit
+import LookAwayCore
 import Observation
 
 /// Menu bar item and dropdown, built with AppKit so the status line can tick
@@ -8,6 +9,7 @@ import Observation
 final class StatusMenuController: NSObject, NSMenuDelegate {
     private let model: AppModel
     private let settings: SettingsWindowController
+    private let updater = Updater()
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
 
@@ -17,6 +19,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
     private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
     private let loginErrorItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+    private let installUpdatesItem = NSMenuItem(title: "", action: #selector(installUpdates), keyEquivalent: "")
     private var refreshTimer: Timer?
 
     init(model: AppModel) {
@@ -27,6 +30,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         buildMenu()
         statusItem.menu = menu
         observeIcon()
+        updater.check()
     }
 
     private func buildMenu() {
@@ -39,7 +43,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         let quitItem = NSMenuItem(title: "Quit Look Away", action: #selector(quit), keyEquivalent: "q")
 
-        for item in [pauseItem, breakNowItem, settingsItem, loginItem, quitItem] {
+        for item in [pauseItem, breakNowItem, settingsItem, loginItem, installUpdatesItem, quitItem] {
             item.target = self
         }
 
@@ -49,6 +53,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         // actions show the icon of the state they lead to.
         breakNowItem.image = Self.symbol("eye.slash")
         settingsItem.image = Self.symbol("gearshape")
+        installUpdatesItem.image = Self.symbol("arrow.down.circle")
         quitItem.image = Self.symbol("power")
 
         menu.items = [
@@ -61,6 +66,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             loginErrorItem,
             settingsItem,
             .separator(),
+            installUpdatesItem,
             quitItem,
         ]
         refreshItems()
@@ -69,6 +75,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     // MARK: Live updates
 
     func menuWillOpen(_ menu: NSMenu) {
+        updater.checkIfStale()
         refreshItems()
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshItems() }
@@ -92,6 +99,38 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         loginItem.state = model.launchAtLoginEnabled ? .on : .off
         loginErrorItem.title = model.launchAtLoginError ?? ""
         loginErrorItem.isHidden = model.launchAtLoginError == nil
+        refreshInstallUpdatesItem()
+    }
+
+    private func refreshInstallUpdatesItem() {
+        installUpdatesItem.isHidden = !updater.isSupported
+        installUpdatesItem.toolTip = nil
+        if updater.isInstalling {
+            installUpdatesItem.title = "Installing Update…"
+            installUpdatesItem.isEnabled = false
+            return
+        }
+        switch updater.availability {
+        case .available(let commits):
+            installUpdatesItem.title = "Install Updates (\(commits) new)"
+            installUpdatesItem.isEnabled = true
+        case .upToDate:
+            installUpdatesItem.title = "Install Updates"
+            installUpdatesItem.isEnabled = false
+        case .unavailable(let reason):
+            installUpdatesItem.title = "Install Updates"
+            installUpdatesItem.isEnabled = false
+            installUpdatesItem.toolTip = Self.explanation(for: reason)
+        }
+    }
+
+    private static func explanation(for reason: UpdateAvailability.Reason) -> String {
+        switch reason {
+        case .fetchFailed: "Couldn't reach GitHub to check for updates."
+        case .notOnMain: "The Look Away checkout isn't on the main branch."
+        case .uncommittedChanges: "The Look Away checkout has uncommitted changes."
+        case .unknownBuild: "This build's commit isn't in the Look Away checkout."
+        }
     }
 
     /// Re-applies the icon whenever `model.iconName` changes.
@@ -114,6 +153,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func togglePause() { model.togglePause() }
     @objc private func breakNow() { model.breakNow() }
     @objc private func openSettings() { settings.show() }
+    @objc private func installUpdates() { updater.install() }
     @objc private func toggleLaunchAtLogin() { model.setLaunchAtLogin(!model.launchAtLoginEnabled) }
     @objc private func quit() { NSApp.terminate(nil) }
 }
