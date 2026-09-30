@@ -4,6 +4,13 @@ CONTENTS := $(BUNDLE)/Contents
 BINARY   := .build/release/LookAway
 INSTALL  := /Applications/$(APP).app
 
+# pkill only sends the signal. Opening the app again before the old copy has
+# exited can fail with LaunchServices error -600, so wait (up to 5s) for it.
+# -a: when Install Updates runs this, the app to quit is our own ancestor,
+# which pkill and pgrep otherwise skip.
+QUIT_APP := pkill -ax LookAway; \
+	for _ in $$(seq 50); do pgrep -ax LookAway >/dev/null || break; sleep 0.1; done
+
 .PHONY: build bundle run install test verses clean
 
 build:
@@ -30,13 +37,11 @@ bundle: build
 	codesign --force --sign - "$(BUNDLE)"
 
 run: bundle
-	pkill -x LookAway || true
+	$(QUIT_APP)
 	open "$(BUNDLE)"
 
 install: bundle
-	# -a: when Install Updates runs this, the app to quit is our own ancestor,
-	# which pkill otherwise skips.
-	pkill -ax LookAway || true
+	$(QUIT_APP)
 	rm -rf "$(INSTALL)"
 	cp -R "$(BUNDLE)" "$(INSTALL)"
 	open "$(INSTALL)"
