@@ -262,6 +262,19 @@ the menu with **Launch at Login** if you'd rather start it by hand.
 
 ### Updating
 
+When there's something new on GitHub, **Install Updates** in the menu lights up
+with the number of new commits. Click it and Look Away pulls the folder you
+built it from and runs `make install`, then quits and comes back on the new
+version about a minute later. It checks when the app starts and whenever you
+open the menu, at most every 15 minutes.
+
+It stays greyed out while that folder is on a branch other than `main` or has
+uncommitted changes, so it never pulls over your own work; hover over it to see
+why. If an update fails, the old version keeps running and the output is in
+`~/Library/Logs/Look Away/update.log`.
+
+To update by hand instead:
+
 ```bash
 cd look-away
 git pull
