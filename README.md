@@ -232,25 +232,21 @@ unknown or repeated or a verse runs past 280 characters.
 
 ## Install
 
-There is no prebuilt download. You build the app yourself, which takes about a
-minute and needs two things:
+Look Away needs macOS 14 Sonoma or newer.
 
-- macOS 14 Sonoma or newer.
-- Xcode 16 or newer, installed from the Mac App Store and opened once so it
-  can finish setting up its command line tools.
+1. Download **LookAway.dmg** from the
+   [latest release](https://github.com/connortorrell/look-away/releases/latest).
+2. Open it and drag **Look Away** onto **Applications**.
+3. Open Look Away from Applications.
 
-Then, in Terminal:
+Or, with [Homebrew](https://brew.sh):
 
 ```bash
-git clone https://github.com/connortorrell/look-away.git
-cd look-away
-make install
+brew install --cask connortorrell/tap/look-away
 ```
 
-`make install` does everything: it compiles the app, wraps it into
-`Look Away.app`, signs it for local use, copies it to your `Applications`
-folder, and launches it. Because it's built on your own Mac, there is no
-Gatekeeper warning.
+The app is signed and notarized by Apple, so it opens without a Gatekeeper
+warning.
 
 When it's running you'll see an eye icon in the menu bar. Click it to see the
 time until the next break, pause reminders, or take a break right away. The
@@ -262,39 +258,84 @@ the menu with **Launch at Login** if you'd rather start it by hand.
 
 ### Updating
 
-When there's something new on GitHub, **Install Updates** in the menu lights up
-with the number of new commits. Click it and Look Away pulls the folder you
-built it from and runs `make install`, then quits and comes back on the new
-version about a minute later. It checks when the app starts and whenever you
-open the menu, at most every 15 minutes.
+When a new release is out, **Install Update** in the menu lights up with its
+version. Click it and Look Away downloads the release, checks that it is
+signed by the same developer, swaps it into place and relaunches, all in a few
+seconds. It checks when the app starts and whenever you open the menu, at most
+every 15 minutes.
 
-It stays greyed out while that folder is on a branch other than `main` or has
-uncommitted changes, so it never pulls over your own work; hover over it to see
-why. If an update fails, the old version keeps running and the output is in
-`~/Library/Logs/Look Away/update.log`.
-
-To update by hand instead:
-
-```bash
-cd look-away
-git pull
-make install
-```
+If an update fails, the old version keeps running and the reason is in
+`~/Library/Logs/Look Away/update.log`. Downloading the DMG again always works
+too, and Homebrew users can `brew upgrade --cask look-away`.
 
 ### Uninstalling
 
 Quit Look Away from its menu, then drag `Look Away.app` out of `Applications`
 to the Trash. If Launch at Login was on, macOS removes the login item with it.
 
-### Other make targets
+### Building from source
+
+You need Xcode 16 or newer, installed from the Mac App Store and opened once so
+it can finish setting up its command line tools. Then:
+
+```bash
+git clone https://github.com/connortorrell/look-away.git
+cd look-away
+make install
+```
+
+`make install` compiles the app, wraps it into `Look Away.app`, signs it for
+local use, copies it to `Applications`, and launches it. A build like this
+doesn't update itself, since it isn't signed with the release certificate, so
+the menu has no Install Update item. `git pull && make install` updates it.
+
+If you built Look Away from source before releases existed, install the DMG
+once over the top. Your settings carry over, and from then on it updates
+itself.
 
 | Command        | What it does                                   |
 |----------------|------------------------------------------------|
 | `make test`    | Runs the scheduler unit tests                  |
 | `make run`     | Builds and launches from `./build` (dev loop)  |
 | `make bundle`  | Builds the `.app` without launching            |
+| `make dist`    | Packages a release into `./dist` (see below)   |
 | `make verses`  | Regenerates the verse of the day list from the BSB |
 | `make clean`   | Removes build output                           |
+
+### Releasing
+
+Push a version tag and GitHub Actions does the rest:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+[`release.yml`](.github/workflows/release.yml) runs the tests, builds a
+universal app, signs it with Developer ID, has Apple notarize it, and publishes
+`LookAway.dmg` (for people) and `LookAway.zip` (for the in-app updater) as a
+GitHub release. Then it bumps the cask in
+[connortorrell/homebrew-tap](https://github.com/connortorrell/homebrew-tap).
+The tag is the only place the version lives. A tag with a hyphen, like
+`v1.2.0-rc1`, is published as a prerelease, which the updater and Homebrew
+ignore, so it's a safe way to test the pipeline.
+
+`make dist VERSION=0.0.0 NOTARIZE=0` does the same packaging locally with an
+ad hoc signature, to check the DMG and zip without a certificate.
+
+The workflow needs these repository secrets:
+
+| Secret                      | What it is |
+|-----------------------------|------------|
+| `DEVELOPER_ID_P12_BASE64`   | The Developer ID Application certificate and key, exported from Keychain Access as `.p12`, then `base64 -i cert.p12` |
+| `DEVELOPER_ID_P12_PASSWORD` | The password chosen when exporting it |
+| `NOTARY_KEY_P8_BASE64`      | An App Store Connect API key (Users and Access → Integrations, Developer role), `base64 -i AuthKey_XXXX.p8` |
+| `NOTARY_KEY_ID`             | That key's ID |
+| `NOTARY_ISSUER_ID`          | The issuer ID shown above the keys list |
+| `HOMEBREW_TAP_TOKEN`        | A fine-grained token with Contents: read and write on `connortorrell/homebrew-tap` only |
+
+The tap repo starts as a copy of [`scripts/homebrew-cask.rb`](scripts/homebrew-cask.rb)
+at `Casks/look-away.rb`.
 
 ## Layout
 
@@ -308,7 +349,8 @@ to the Trash. If Launch at Login was on, macOS removes the login item with it.
   break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
   frontmost-app probe and the installed-apps scan, sleep/lock observers,
   launch-at-login.
-- `scripts` — the verse of the day list and its generator.
+- `scripts` — the verse of the day list and its generator, the release
+  packaging script, and the Homebrew cask template.
 - `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection,
   app-detection and verse tests, driven by a fake clock, a fake device probe and a fake
   frontmost-app probe.

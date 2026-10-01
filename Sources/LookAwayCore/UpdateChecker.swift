@@ -1,113 +1,136 @@
 import Foundation
 
-/// What a finished command printed and how it exited.
-public struct CommandResult: Equatable, Sendable {
-    public var status: Int32
-    public var output: String
-
-    public init(status: Int32, output: String = "") {
-        self.status = status
-        self.output = output
-    }
+/// Fetches the body at a URL. Injected so the checker can be tested without a
+/// network.
+public protocol DataFetching: Sendable {
+    func data(from url: URL) async throws -> Data
 }
 
-/// Runs `git` in a directory. Injected so the checker can be tested without a
-/// repository or a network.
-public protocol CommandRunning: Sendable {
-    func run(_ arguments: [String], in directory: URL) async -> CommandResult
+/// A published release the running app could update to.
+public struct Release: Equatable, Sendable {
+    public var version: String
+    public var downloadURL: URL
+
+    public init(version: String, downloadURL: URL) {
+        self.version = version
+        self.downloadURL = downloadURL
+    }
 }
 
 public enum UpdateAvailability: Equatable, Sendable {
     public enum Reason: Equatable, Sendable {
-        /// Offline, or GitHub refused the fetch.
+        /// Offline, or GitHub's answer couldn't be read.
         case fetchFailed
-        /// The checkout is on another branch, so pulling would update the
-        /// wrong thing.
-        case notOnMain
-        /// Tracked files have edits a pull could trip over.
-        case uncommittedChanges
-        /// The commit the app was built from isn't in the checkout.
-        case unknownBuild
+        /// The newest release has no zip for the updater to install.
+        case noDownload
     }
 
     case upToDate
-    case available(commits: Int)
+    case available(Release)
     case unavailable(Reason)
 }
 
-/// Asks the checkout the app was built from whether GitHub has anything newer.
+/// Asks GitHub whether a release newer than the running app has been published.
 ///
-/// "Newer" is measured from the commit the running app was built from, not the
-/// checkout's HEAD, so a `git pull` done by hand without reinstalling still
-/// counts as an update waiting to be installed.
+/// `releases/latest` never returns drafts or prereleases, so tagging
+/// `v1.2.0-rc1` tests the release pipeline without offering it to anyone.
 public struct UpdateChecker: Sendable {
-    public static let branch = "main"
+    public static let latestReleaseURL = URL(string: "https://api.github.com/repos/connortorrell/look-away/releases/latest")!
+    /// The asset the updater installs; the DMG next to it is for people.
+    public static let assetName = "LookAway.zip"
 
-    public let sourceDirectory: URL
-    public let builtCommit: String
-    private let runner: CommandRunning
+    public let currentVersion: String
+    private let fetcher: DataFetching
 
-    public init(sourceDirectory: URL, builtCommit: String, runner: CommandRunning = ProcessCommandRunner()) {
-        self.sourceDirectory = sourceDirectory
-        self.builtCommit = builtCommit
-        self.runner = runner
+    public init(currentVersion: String, fetcher: DataFetching = URLSessionFetcher()) {
+        self.currentVersion = currentVersion
+        self.fetcher = fetcher
     }
 
     public func check() async -> UpdateAvailability {
-        guard await git("fetch", "--quiet", "origin", Self.branch).status == 0 else {
+        guard let body = try? await fetcher.data(from: Self.latestReleaseURL),
+              let release = try? JSONDecoder().decode(LatestRelease.self, from: body),
+              let latest = AppVersion(release.tagName),
+              let current = AppVersion(currentVersion)
+        else {
             return .unavailable(.fetchFailed)
         }
-        let head = await git("symbolic-ref", "--short", "HEAD")
-        guard head.status == 0, head.output == Self.branch else {
-            return .unavailable(.notOnMain)
+        guard latest > current else { return .upToDate }
+        guard let asset = release.assets.first(where: { $0.name == Self.assetName }) else {
+            return .unavailable(.noDownload)
         }
-        let changes = await git("status", "--porcelain", "--untracked-files=no")
-        guard changes.status == 0, changes.output.isEmpty else {
-            return .unavailable(.uncommittedChanges)
-        }
-        let behind = await git("rev-list", "--count", "\(builtCommit)..origin/\(Self.branch)")
-        guard behind.status == 0, let count = Int(behind.output) else {
-            return .unavailable(.unknownBuild)
-        }
-        return count > 0 ? .available(commits: count) : .upToDate
+        return .available(Release(version: latest.description, downloadURL: asset.browserDownloadURL))
     }
 
-    private func git(_ arguments: String...) async -> CommandResult {
-        await runner.run(arguments, in: sourceDirectory)
+    /// The part of GitHub's release JSON the checker reads.
+    private struct LatestRelease: Decodable {
+        struct Asset: Decodable {
+            var name: String
+            var browserDownloadURL: URL
+
+            enum CodingKeys: String, CodingKey {
+                case name
+                case browserDownloadURL = "browser_download_url"
+            }
+        }
+
+        var tagName: String
+        var assets: [Asset]
+
+        enum CodingKeys: String, CodingKey {
+            case tagName = "tag_name"
+            case assets
+        }
     }
 }
 
-/// Runs `/usr/bin/git` as a child process.
-public struct ProcessCommandRunner: CommandRunning {
-    public init() {}
+/// A dotted version number such as `1.10.2`, compared number by number so
+/// `1.10` is newer than `1.9`. A leading `v` is dropped, and missing trailing
+/// numbers count as zero, so `1.2` equals `1.2.0`.
+public struct AppVersion: Comparable, CustomStringConvertible, Sendable {
+    public let components: [Int]
 
-    public func run(_ arguments: [String], in directory: URL) async -> CommandResult {
-        await Task.detached(priority: .utility) { Self.runToCompletion(arguments, in: directory) }.value
+    public init?(_ string: String) {
+        let trimmed = string.hasPrefix("v") ? string.dropFirst() : Substring(string)
+        let parts = trimmed.split(separator: ".", omittingEmptySubsequences: false)
+        let numbers = parts.compactMap { UInt($0) }
+        guard !parts.isEmpty, numbers.count == parts.count else { return nil }
+        components = numbers.map { Int($0) }
     }
 
-    private static func runToCompletion(_ arguments: [String], in directory: URL) -> CommandResult {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-        process.currentDirectoryURL = directory
-        // A menu bar app has no terminal to ask for a password on; fail
-        // instead of waiting for an answer that never comes.
-        var environment = ProcessInfo.processInfo.environment
-        environment["GIT_TERMINAL_PROMPT"] = "0"
-        process.environment = environment
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        process.standardInput = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            return CommandResult(status: -1)
+    public var description: String {
+        components.map(String.init).joined(separator: ".")
+    }
+
+    public static func < (lhs: AppVersion, rhs: AppVersion) -> Bool {
+        let count = max(lhs.components.count, rhs.components.count)
+        for index in 0..<count {
+            let left = index < lhs.components.count ? lhs.components[index] : 0
+            let right = index < rhs.components.count ? rhs.components[index] : 0
+            if left != right { return left < right }
         }
-        // Drain before waiting so a chatty command can't fill the pipe and stall.
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        return CommandResult(status: process.terminationStatus, output: text)
+        return false
+    }
+
+    public static func == (lhs: AppVersion, rhs: AppVersion) -> Bool {
+        !(lhs < rhs) && !(rhs < lhs)
+    }
+}
+
+/// Fetches with `URLSession`, treating anything but a 200 as a failure.
+public struct URLSessionFetcher: DataFetching {
+    public struct BadStatus: Error {
+        public let code: Int
+    }
+
+    public init() {}
+
+    public func data(from url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else { throw BadStatus(code: code) }
+        return data
     }
 }

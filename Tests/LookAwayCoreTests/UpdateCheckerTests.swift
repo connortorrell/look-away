@@ -2,85 +2,86 @@ import Foundation
 import Testing
 @testable import LookAwayCore
 
-/// Answers each git command from a script and records what was asked.
-private actor FakeGit: CommandRunning {
-    private var replies: [String: CommandResult]
-    private(set) var asked: [String] = []
+/// Answers with a fixed body, or fails as if offline.
+private struct FakeGitHub: DataFetching {
+    var body: String?
 
-    init(_ replies: [String: CommandResult]) {
-        self.replies = replies
-    }
-
-    func run(_ arguments: [String], in directory: URL) async -> CommandResult {
-        let command = arguments.joined(separator: " ")
-        asked.append(command)
-        return replies[command] ?? CommandResult(status: 128)
+    func data(from url: URL) async throws -> Data {
+        guard let body else { throw URLError(.notConnectedToInternet) }
+        return Data(body.utf8)
     }
 }
 
 struct UpdateCheckerTests {
-    private static let built = "abc123"
+    private static let zipURL = "https://github.com/connortorrell/look-away/releases/download/v1.2.0/LookAway.zip"
 
-    /// A clean checkout on main, `behind` commits past the build.
-    private static func replies(
-        fetch: Int32 = 0,
-        branch: String = "main",
-        changes: String = "",
-        behind: String = "0"
-    ) -> [String: CommandResult] {
-        [
-            "fetch --quiet origin main": CommandResult(status: fetch),
-            "symbolic-ref --short HEAD": CommandResult(status: 0, output: branch),
-            "status --porcelain --untracked-files=no": CommandResult(status: 0, output: changes),
-            "rev-list --count \(built)..origin/main": CommandResult(status: 0, output: behind),
-        ]
+    /// GitHub's release JSON, trimmed to what the checker reads plus a DMG
+    /// asset it should skip.
+    private static func release(tag: String, assets: [String] = ["LookAway.dmg", "LookAway.zip"]) -> String {
+        let list = assets.map { name in
+            #"{"name": "\#(name)", "browser_download_url": "https://github.com/connortorrell/look-away/releases/download/\#(tag)/\#(name)"}"#
+        }
+        return #"{"tag_name": "\#(tag)", "html_url": "https://example.com", "assets": [\#(list.joined(separator: ","))]}"#
     }
 
-    private static func check(_ git: FakeGit) async -> UpdateAvailability {
-        await UpdateChecker(
-            sourceDirectory: URL(fileURLWithPath: "/tmp/look-away"),
-            builtCommit: built,
-            runner: git
-        ).check()
+    private static func check(current: String, body: String?) async -> UpdateAvailability {
+        await UpdateChecker(currentVersion: current, fetcher: FakeGitHub(body: body)).check()
     }
 
-    @Test func reportsTheNewCommitsOnACleanMain() async {
-        let git = FakeGit(Self.replies(behind: "3"))
-        #expect(await Self.check(git) == .available(commits: 3))
+    @Test func offersANewerRelease() async {
+        let result = await Self.check(current: "1.1.0", body: Self.release(tag: "v1.2.0"))
+        #expect(result == .available(Release(version: "1.2.0", downloadURL: URL(string: Self.zipURL)!)))
     }
 
-    @Test func isUpToDateWhenNothingIsNew() async {
-        let git = FakeGit(Self.replies(behind: "0"))
-        #expect(await Self.check(git) == .upToDate)
+    @Test func isUpToDateOnTheSameVersion() async {
+        #expect(await Self.check(current: "1.2.0", body: Self.release(tag: "v1.2.0")) == .upToDate)
     }
 
-    @Test func stopsWhenTheFetchFails() async {
-        let git = FakeGit(Self.replies(fetch: 128, behind: "3"))
-        #expect(await Self.check(git) == .unavailable(.fetchFailed))
-        #expect(await git.asked == ["fetch --quiet origin main"])
+    @Test func neverOffersAnOlderRelease() async {
+        #expect(await Self.check(current: "1.3.0", body: Self.release(tag: "v1.2.0")) == .upToDate)
     }
 
-    @Test func holdsBackOnAnotherBranch() async {
-        let git = FakeGit(Self.replies(branch: "install-updates", behind: "3"))
-        #expect(await Self.check(git) == .unavailable(.notOnMain))
+    @Test func comparesNumbersRatherThanText() async {
+        let result = await Self.check(current: "1.9", body: Self.release(tag: "v1.10"))
+        guard case .available(let release) = result else {
+            Issue.record("expected an update, got \(result)")
+            return
+        }
+        #expect(release.version == "1.10")
     }
 
-    @Test func holdsBackWithUncommittedChanges() async {
-        let git = FakeGit(Self.replies(changes: " M Makefile", behind: "3"))
-        #expect(await Self.check(git) == .unavailable(.uncommittedChanges))
+    @Test func treatsMissingTrailingNumbersAsZero() async {
+        #expect(await Self.check(current: "1.2", body: Self.release(tag: "v1.2.0")) == .upToDate)
     }
 
-    @Test func holdsBackWhenTheBuildCommitIsUnknown() async {
-        var replies = Self.replies()
-        replies["rev-list --count \(Self.built)..origin/main"] = CommandResult(status: 128)
-        let git = FakeGit(replies)
-        #expect(await Self.check(git) == .unavailable(.unknownBuild))
+    @Test func holdsBackWhenTheReleaseHasNoZip() async {
+        let body = Self.release(tag: "v1.2.0", assets: ["LookAway.dmg"])
+        #expect(await Self.check(current: "1.1.0", body: body) == .unavailable(.noDownload))
     }
 
-    @Test func countsFromTheBuiltCommitRatherThanHead() async {
-        let git = FakeGit(Self.replies(behind: "1"))
-        _ = await Self.check(git)
-        #expect(await git.asked.last == "rev-list --count \(Self.built)..origin/main")
-        #expect(await !git.asked.contains { $0.contains("HEAD..") })
+    @Test func failsOnUnreadableJSON() async {
+        #expect(await Self.check(current: "1.1.0", body: "<html>rate limited</html>") == .unavailable(.fetchFailed))
+    }
+
+    @Test func failsOnAnUnreadableTag() async {
+        #expect(await Self.check(current: "1.1.0", body: Self.release(tag: "latest")) == .unavailable(.fetchFailed))
+    }
+
+    @Test func failsWhenOffline() async {
+        #expect(await Self.check(current: "1.1.0", body: nil) == .unavailable(.fetchFailed))
+    }
+
+    @Test(arguments: [
+        ("v1.2.3", [1, 2, 3]),
+        ("1.2.3", [1, 2, 3]),
+        ("10", [10]),
+    ])
+    func readsVersions(text: String, components: [Int]) {
+        #expect(AppVersion(text)?.components == components)
+    }
+
+    @Test(arguments: ["", "v", "1..2", "1.2-rc1", "-1.0", "1.x"])
+    func rejectsMalformedVersions(text: String) {
+        #expect(AppVersion(text) == nil)
     }
 }
