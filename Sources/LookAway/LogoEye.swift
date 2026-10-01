@@ -1,14 +1,17 @@
 import AppKit
 
-/// The app icon's eye, glancing aside, as a menu bar template image.
+/// The app icon's eye, glancing aside, as a template image.
 ///
 /// Drawn from the same geometry as `Resources/Artwork/AppIcon.svg`: an almond
 /// from x 18 to 82 with its curves pulled to y 22 and 78, and a pupil of radius
 /// 9 at (63, 50), all on a 100-unit square. The stroke is set in points rather
-/// than scaled, so it matches the weight of the SF Symbols the other states use.
+/// than scaled, so it can match the weight of the SF Symbols around it.
 enum LogoEye {
-    static let image: NSImage = {
-        let size = NSSize(width: 18, height: 18)
+    /// The menu bar's: an 18 pt square, at the weight of the state symbols.
+    static let image = image(size: NSSize(width: 18, height: 18), lineWidth: 1.5)
+
+    /// The eye centered on a canvas of `size`, 95% of its width across.
+    static func image(size: NSSize, lineWidth: CGFloat) -> NSImage {
         let image = NSImage(size: size, flipped: true) { rect in
             let scale = rect.width / 64 * 0.95
             func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
@@ -20,7 +23,7 @@ enum LogoEye {
             quadCurve(almond, to: point(82, 50), control: point(50, 22))
             quadCurve(almond, to: point(18, 50), control: point(50, 78))
             almond.close()
-            almond.lineWidth = 1.5
+            almond.lineWidth = lineWidth
             almond.lineJoinStyle = .round
             NSColor.black.setStroke()
             almond.stroke()
@@ -34,7 +37,7 @@ enum LogoEye {
         image.isTemplate = true
         image.accessibilityDescription = "Look Away"
         return image
-    }()
+    }
 
     /// The SVG's quadratic curve, as the cubic NSBezierPath draws.
     private static func quadCurve(_ path: NSBezierPath, to end: NSPoint, control: NSPoint) {

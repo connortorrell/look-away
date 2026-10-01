@@ -7,9 +7,16 @@ struct BreakView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Image(systemName: model.breakPhase == .done ? "checkmark.circle" : "eye")
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(.secondary)
+            Group {
+                if model.breakPhase == .done {
+                    Image(systemName: "checkmark.circle")
+                        .font(.system(size: 30, weight: .light))
+                } else {
+                    Image(nsImage: Self.eye)
+                        .renderingMode(.template)
+                }
+            }
+            .foregroundStyle(.secondary)
 
             Text(model.breakPhase == .done ? "Done" : "\(model.remainingSeconds)")
                 .font(.system(size: 76, weight: .bold, design: .rounded))
@@ -49,6 +56,10 @@ struct BreakView: View {
                 .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
     }
+
+    /// The logo's eye, on the 46 by 30 canvas SF Symbols' eye takes at 30 pt
+    /// light, the size this slot and the checkmark after it are laid out for.
+    private static let eye = LogoEye.image(size: NSSize(width: 46, height: 30), lineWidth: 2)
 
     /// Dimmed, not hidden, once the countdown starts: the point is to look
     /// away, but a glance back should still find the words.
