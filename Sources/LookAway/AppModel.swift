@@ -9,7 +9,8 @@ import Observation
 final class AppModel {
     enum BreakPhase { case counting, done }
 
-    private(set) var iconName = "eye"
+    /// An SF Symbol name, or `logoIcon` for the app icon's own eye.
+    private(set) var iconName = AppModel.logoIcon
     private(set) var remainingSeconds = 0
     private(set) var breakPhase: BreakPhase = .counting
     /// The opening seconds of a break with a verse, before the countdown
@@ -307,6 +308,9 @@ final class AppModel {
         }
     }
 
+    /// The resting icon: not an SF Symbol but `LogoEye`, the app icon's eye.
+    static let logoIcon = "logo"
+
     private func refreshIcon() {
         let icon: String
         switch scheduler.state {
@@ -315,7 +319,7 @@ final class AppModel {
         case .offSchedule: icon = "moon.zzz"
         case .held(_, .meeting): icon = "video"
         case .held(_, .app): icon = "macwindow"
-        case .stopped, .idle, .snoozed: icon = "eye"
+        case .stopped, .idle, .snoozed: icon = Self.logoIcon
         }
         if icon != iconName { iconName = icon }
     }
