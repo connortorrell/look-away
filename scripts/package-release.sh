@@ -24,6 +24,7 @@ NOTARIZE=${NOTARIZE:-1}
 
 APP="build/Look Away.app"
 DIST=dist
+DMGBUILD_VERSION=1.6.7
 
 notarize() {
     xcrun notarytool submit "$1" \
@@ -54,12 +55,15 @@ fi
 
 ditto -c -k --keepParent "$APP" "$DIST/LookAway.zip"
 
-STAGING="$DIST/dmg"
-mkdir "$STAGING"
-cp -R "$APP" "$STAGING/"
-ln -s /Applications "$STAGING/Applications"
-hdiutil create -volname "Look Away" -srcfolder "$STAGING" -format UDZO -ov "$DIST/LookAway.dmg"
-rm -rf "$STAGING"
+# dmgbuild lays out the window (background, icon positions, no toolbar) by
+# writing Finder's .DS_Store itself, so it works headless on CI. It lives in its
+# own virtualenv to stay clear of the system Python.
+DMGBUILD_ENV=.build/dmgbuild
+if [ ! -x "$DMGBUILD_ENV/bin/dmgbuild" ]; then
+    python3 -m venv "$DMGBUILD_ENV"
+    "$DMGBUILD_ENV/bin/pip" install --quiet --disable-pip-version-check "dmgbuild==$DMGBUILD_VERSION"
+fi
+"$DMGBUILD_ENV/bin/dmgbuild" -s scripts/dmg-settings.py -D app="$APP" "Look Away" "$DIST/LookAway.dmg"
 
 if [ "$SIGN_IDENTITY" != "-" ]; then
     codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DIST/LookAway.dmg"

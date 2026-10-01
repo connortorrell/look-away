@@ -300,6 +300,7 @@ itself.
 | `make bundle`  | Builds the `.app` without launching            |
 | `make dist`    | Packages a release into `./dist` (see below)   |
 | `make verses`  | Regenerates the verse of the day list from the BSB |
+| `make artwork` | Re-renders the app icon and DMG background from their SVGs |
 | `make clean`   | Removes build output                           |
 
 ### Releasing
@@ -349,8 +350,12 @@ at `Casks/look-away.rb`.
   break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
   frontmost-app probe and the installed-apps scan, sleep/lock observers,
   launch-at-login.
+- `Resources/Artwork` — the app icon and DMG background as SVG. `make artwork`
+  renders them into `Resources/AppIcon.icns` and `Resources/dmg-background*.png`,
+  which are committed; it needs `rsvg-convert` (`brew install librsvg`).
 - `scripts` — the verse of the day list and its generator, the release
-  packaging script, and the Homebrew cask template.
+  packaging script with its DMG layout, the artwork renderer, and the Homebrew
+  cask template.
 - `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection,
   app-detection and verse tests, driven by a fake clock, a fake device probe and a fake
   frontmost-app probe.

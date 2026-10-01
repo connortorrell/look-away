@@ -8,6 +8,8 @@
 	<string>Look Away</string>
 	<key>CFBundleExecutable</key>
 	<string>LookAway</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.connortorrell.LookAway</string>
 	<key>CFBundleInfoDictionaryVersion</key>
