@@ -111,14 +111,14 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             return
         }
         switch updater.availability {
-        case .available(let commits):
-            installUpdatesItem.title = "Install Updates (\(commits) new)"
+        case .available(let release):
+            installUpdatesItem.title = "Install Update (v\(release.version))"
             installUpdatesItem.isEnabled = true
         case .upToDate:
-            installUpdatesItem.title = "Install Updates"
+            installUpdatesItem.title = "Install Update"
             installUpdatesItem.isEnabled = false
         case .unavailable(let reason):
-            installUpdatesItem.title = "Install Updates"
+            installUpdatesItem.title = "Install Update"
             installUpdatesItem.isEnabled = false
             installUpdatesItem.toolTip = Self.explanation(for: reason)
         }
@@ -127,9 +127,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private static func explanation(for reason: UpdateAvailability.Reason) -> String {
         switch reason {
         case .fetchFailed: "Couldn't reach GitHub to check for updates."
-        case .notOnMain: "The Look Away checkout isn't on the main branch."
-        case .uncommittedChanges: "The Look Away checkout has uncommitted changes."
-        case .unknownBuild: "This build's commit isn't in the Look Away checkout."
+        case .noDownload: "The newest release has nothing for Look Away to install."
         }
     }
 

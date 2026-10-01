@@ -1,20 +1,27 @@
 APP      := Look Away
 BUNDLE   := build/$(APP).app
 CONTENTS := $(BUNDLE)/Contents
-BINARY   := .build/release/LookAway
 INSTALL  := /Applications/$(APP).app
+
+# `make dist` overrides these for a universal, Developer ID-signed release.
+# Left alone they build for this Mac and sign ad hoc, which needs no
+# certificate. VERSION and BUILD_NUMBER default to what Info.plist says.
+ARCH_FLAGS    :=
+BINARY        := .build/release/LookAway
+SIGN_IDENTITY := -
+VERSION       :=
+BUILD_NUMBER  :=
+NOTARIZE      := 1
 
 # pkill only sends the signal. Opening the app again before the old copy has
 # exited can fail with LaunchServices error -600, so wait (up to 5s) for it.
-# -a: when Install Updates runs this, the app to quit is our own ancestor,
-# which pkill and pgrep otherwise skip.
-QUIT_APP := pkill -ax LookAway; \
-	for _ in $$(seq 50); do pgrep -ax LookAway >/dev/null || break; sleep 0.1; done
+QUIT_APP := pkill -x LookAway; \
+	for _ in $$(seq 50); do pgrep -x LookAway >/dev/null || break; sleep 0.1; done
 
-.PHONY: build bundle run install test verses clean
+.PHONY: build bundle run install dist test verses clean
 
 build:
-	swift build -c release
+	swift build -c release $(ARCH_FLAGS)
 
 test:
 	swift test
@@ -28,13 +35,12 @@ bundle: build
 	cp "$(BINARY)" "$(CONTENTS)/MacOS/LookAway"
 	cp Resources/Info.plist "$(CONTENTS)/Info.plist"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
-	# Install Updates in the menu pulls and rebuilds this checkout, and
-	# compares GitHub against the commit the app was built from.
-	if commit=$$(git rev-parse HEAD 2>/dev/null); then \
-		plutil -insert LookAwaySourceDirectory -string "$(CURDIR)" "$(CONTENTS)/Info.plist"; \
-		plutil -insert LookAwayCommit -string "$$commit" "$(CONTENTS)/Info.plist"; \
-	fi
-	codesign --force --sign - "$(BUNDLE)"
+	$(if $(VERSION),plutil -replace CFBundleShortVersionString -string "$(VERSION)" "$(CONTENTS)/Info.plist")
+	$(if $(BUILD_NUMBER),plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" "$(CONTENTS)/Info.plist")
+	# Notarization needs the hardened runtime and a secure timestamp, and only
+	# a real identity can get a timestamp, so ad hoc builds skip both.
+	codesign --force $(if $(filter -,$(SIGN_IDENTITY)),,--options runtime --timestamp) \
+		--sign "$(SIGN_IDENTITY)" "$(BUNDLE)"
 
 run: bundle
 	$(QUIT_APP)
@@ -46,5 +52,11 @@ install: bundle
 	cp -R "$(BUNDLE)" "$(INSTALL)"
 	open "$(INSTALL)"
 
+# A release: dist/LookAway.dmg for people, dist/LookAway.zip for the in-app
+# updater. NOTARIZE=0 skips Apple's notary service for a local dry run.
+dist:
+	VERSION="$(VERSION)" BUILD_NUMBER="$(BUILD_NUMBER)" SIGN_IDENTITY="$(SIGN_IDENTITY)" \
+		NOTARIZE="$(NOTARIZE)" scripts/package-release.sh
+
 clean:
-	rm -rf .build build
+	rm -rf .build build dist
