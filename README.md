@@ -2,10 +2,18 @@
   <img src="Resources/Artwork/AppIcon.svg" alt="Look Away app icon: a white eye glancing to the side on a purple rounded square" width="128">
 </p>
 
-# Look Away
+<h1 align="center">Look Away</h1>
 
-A tiny macOS menu bar app for the 20/20/20 rule: every 20 minutes of screen
-time, look at something 20 feet away for 20 seconds.
+<p align="center">
+  A macOS menu bar app for the 20-20-20 rule: every 20 minutes,<br>
+  look at something 20 feet away for 20 seconds.
+</p>
+
+<p align="center">
+  <a href="https://github.com/connortorrell/look-away/releases/latest"><img src="https://img.shields.io/github/v/release/connortorrell/look-away?label=download" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="Requires macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/connortorrell/look-away" alt="MIT license"></a>
+</p>
 
 <p align="center">
   <picture>
@@ -14,58 +22,61 @@ time, look at something 20 feet away for 20 seconds.
   </picture>
 </p>
 
-## Behavior
+## Install
 
-- Lives in the menu bar (eye icon). No Dock icon, no main window.
-- Every 20 minutes a floating panel appears on the display your cursor is on,
-  above every other window, without taking keyboard focus from your current app.
-- The panel starts a 20-second countdown the moment it appears. At zero it
-  shows "Done", plays a soft chime, and closes itself.
-- **Delay 5 min** hides the panel and brings it back later with a fresh
-  20-second countdown. Delays can be chained.
-- **Decline** closes the panel immediately.
-- The next 20-minute interval starts when the panel closes (finished or
-  declined), never from a snooze.
-- Sleep or screen lock pauses everything; wake or unlock starts a fresh
-  20 minutes. Meetings and the apps you name hold the popup too, if you switch
-  those on — but the 20 minutes keeps counting (see below).
-- Menu: live "Next break in m:ss", Pause / Resume Reminders, Take a Break Now,
-  Launch at Login, Settings, Install Update, Quit.
+Requires macOS 14 Sonoma or later.
 
-Durations live in `Sources/LookAwayCore/Config.swift`.
+1. Download [**LookAway.dmg**](https://github.com/connortorrell/look-away/releases/latest/download/LookAway.dmg).
+2. Open it and drag **Look Away** onto **Applications**.
+3. Open Look Away from Applications.
 
-## Schedule
+Or install with [Homebrew](https://brew.sh):
 
-**Settings…** in the menu opens a schedule panel. It is opt-in: leave it off and
-reminders run around the clock, exactly as before.
+```bash
+brew install --cask connortorrell/tap/look-away
+```
+
+The app is signed and notarized by Apple, so it opens without a warning, and
+it updates itself.
+
+Look Away lives in the menu bar, with no Dock icon or main window. Once it's
+running, an eye icon appears there and the first break comes 20 minutes later.
+The first time it runs from Applications, it sets itself to start at login.
+Turn that off with **Launch at Login** in its menu.
+
+## How breaks work
+
+- Every 20 minutes a popup opens on the display your cursor is on. It doesn't take
+  keyboard focus, so it won't interrupt your typing.
+- It counts down 20 seconds, then shows "Done", plays a soft chime and closes.
+- **Delay 5 min** brings it back later. **Decline** closes it.
+- The next 20 minutes start when the popup closes.
+- Sleep or screen lock pauses the timer. You get a fresh 20 minutes when you
+  come back.
+
+Click the menu bar icon to see the time until the next break, pause reminders,
+take a break now, or open **Settings…**.
+
+## Features
+
+Everything below is optional and off until you turn it on in **Settings…**.
+
+### Schedule
+
+Only get reminders during the hours you choose.
 
 <p align="center">
-  <img src="docs/settings.png" alt="Look Away settings panel with the schedule switched on, Monday through Friday selected, default hours of 8:00 AM to 5:00 PM, and Monday customized to end at 3:00 PM" width="470">
+  <img src="docs/settings.png" alt="Look Away settings panel with the schedule switched on, Monday through Friday selected, shared hours of 8:00 AM to 5:00 PM, and Monday customized to end at 3:00 PM" width="470">
 </p>
 
-- Click the S M T W T F S circles to pick the days reminders should run on.
-- One start and end time covers every selected day — set 9:00 AM to 5:00 PM once
-  and the whole week follows it.
-- Need an exception? **Different hours on some days** reveals a row per selected
-  day where any one of them can be given its own start and end. Days with their
-  own hours get a dot under their circle; **Reset** puts them back on the shared
-  hours. (Right-clicking a day circle offers the same thing.)
-- An end time earlier than the start reads as overnight, so 10:00 PM to 2:00 AM
-  works for a night shift; the panel marks it "(next day)". The same start and
-  end time runs all day.
-- Outside the schedule the menu bar shows a moon and the menu reads
-  "Outside schedule — back Mon at 9:00 AM". The hold begins the moment the
-  window closes. **Take a Break Now** still works.
+- Pick the days, and set one start and end time for all of them.
+- Give individual days their own hours when you need to.
+- Overnight hours work too, for example 10:00 PM to 2:00 AM.
+- Outside your hours, the menu bar shows a moon.
 
-The schedule is saved to preferences and applied the moment it is edited, without
-restarting the current 20 minutes. The settings window closes with ⌘W or Esc —
-if a field has the keyboard, the first Esc hands it back and the second closes —
-and reopens where you left it.
+### Pause during meetings
 
-## Meetings
-
-The same panel can hold reminders while you're on a call. Also opt-in: leave
-**Pause reminders during meetings** off and nothing is watched at all.
+Hold reminders while you're on a call.
 
 <p align="center">
   <picture>
@@ -74,88 +85,19 @@ The same panel can hold reminders while you're on a call. Also opt-in: leave
   </picture>
 </p>
 
-- **Apps that count as a meeting** is a list of chips over a search field. Type
-  to search every app installed on the Mac and click one to add it; click the
-  × on a chip to drop it. The first time the panel opens, the meeting apps you
-  actually have installed — Zoom, Teams, Slack, Pop, Discord, FaceTime, Webex,
-  and the browsers (Chrome, Edge, Arc, Brave, Firefox, Safari) — are filled in
-  for you. Clear the list and it stays clear.
-- Detection watches **real device use, not which app is in front**: macOS is
-  asked which processes are holding an input stream, so a Zoom window sitting
-  in the background during a call still counts, and Zoom merely being open does
-  not. Every meeting is pinned on a named app that is genuinely on a device;
-  activity that can't be attributed to one of your chosen apps is ignored. Neither query records anything, so neither one asks for microphone or
-  camera permission. Audio *input* and the camera are what count by default;
-  audio output is a separate opt-in, described below.
-- **Count camera use too** covers sitting muted but on video. The system only
-  reports camera use per device rather than per process, so it can never name
-  the app on its own: it counts only while one of your chosen apps is itself on
-  the audio devices, playing the call you are listening to. A chosen app merely
-  being *open* is not enough, so Photo Booth — or anything else using the
-  camera — is never mistaken for a meeting just because Zoom or a browser
-  happens to be running. Browsers don't count for the camera at all, even
-  while playing audio: one is playing something most of the day, so a
-  website using the camera would otherwise read as a meeting. They still
-  count for the microphone, where the process is named.
-- **Count audio playing too**, tucked behind *Also detect listen-only calls*,
-  is off by default and best left that way. Audio
-  coming *out* of an app is a weak signal — a YouTube video, a Slack ping and a
-  call all look identical — and browsers and chat apps are in the list above,
-  so switching it on will sometimes hold reminders during ordinary browsing.
-  Worth it only if you sit in listen-only calls that release the microphone
-  entirely; most apps mute in software and keep it open, so they are already
-  covered without this.
-- **Detection delay** is how long the signal — microphone, camera or audio —
-  has to hold before it counts, so a notification chime or a quick "can you
-  hear me?" doesn't hold anything. Once a meeting is on, a 30-second grace period keeps a spell on
-  mute — or the gap between two back-to-back calls — from letting a popup
-  through. That grace is also why a break owed at the end of a call arrives
-  about half a minute after you hang up rather than the instant you do. Both
-  apply to changes seen while watching: switching the feature on, editing its
-  settings, or waking the Mac reads the current state as it is, so a call
-  already under way holds straight away and one that ended during sleep is
-  released at once.
-- **The 20 minutes keeps running through a call.** Only the popup is held
-  back, so time on the call still counts towards the next break:
-  - A break that came due during the call opens the moment you hang up —
-    which is when you most want it, after an hour of staring at faces.
-  - A call shorter than the time left just carries on counting, so the break
-    lands when it always would have, not 20 minutes after the call.
-  - Either way it's one break, not a queue of them.
-- A meeting starting mid-break closes the popup, and that break is owed again
-  as soon as the call ends, since you never got it.
-- While a meeting is on, the menu bar shows a video camera and the menu reads
-  "Zoom meeting — next break in 4:32", or "break when you're free" once it's
-  already due. That holds even if you **Delay** a break you took by hand
-  during the call — being on a call is the more useful thing to be told, and
-  the delay's own deadline becomes the one the meeting owes. **Take a Break
-  Now** still works, and pausing from the menu still outranks detection.
-- The panel's last line says what detection sees right now — "Not in a
-  meeting right now" with the apps that count, or "Zoom is on a call.
-  Reminders are held until it ends." — so you can tell at a glance whether a
-  call is being picked up, and by which app.
-- The schedule still wins: when the scheduled hours end mid-call the hold
-  hands over to the schedule, and nothing is owed when the call ends. The same
-  goes for a break you took by hand outside the hours and then delayed during
-  a call — the schedule's hold takes over when the call ends.
+- A call is detected by microphone use, not by which app is in front. Zoom
+  open in the background doesn't count. A call in Zoom does.
+- Optionally, the camera counts too, for when you sit muted on video.
+- The app list comes pre-filled with the meeting apps and browsers you have
+  installed. Add or remove any app.
+- The 20 minutes keep counting during a call. If a break came due, it opens
+  shortly after you hang up.
 
-Capture processes don't always share their app's bundle ID — Zoom captures from
-`us.zoom.caphost` alongside `us.zoom.xos`, Electron apps capture from a nested
-helper, and FaceTime (like an iPhone call answered on the Mac) captures from the
-system's call daemon, `com.apple.avconferenced` — so each app carries the ID
-patterns that belong to it. Chromium browsers are matched through their helper;
-Safari hands capture to a shared WebKit process that doesn't say which browser
-it came from, so that one entry covers any WebKit browser.
+[More on meeting detection](docs/how-it-works.md#meetings)
 
-## Apps
+### Pause in chosen apps
 
-A meeting is not the only thing worth not being interrupted during, and the
-microphone is not the only way to tell. A full-screen game holds no devices at
-all, so the meeting check above can never see it. This list can: name an app,
-and reminders are held back for as long as it is the app you are in.
-
-Opt-in like the rest. Leave **Pause reminders in certain apps** off and nothing
-is watched.
+Hold reminders while a particular app is in front, like a full-screen game.
 
 <p align="center">
   <picture>
@@ -164,42 +106,15 @@ is watched.
   </picture>
 </p>
 
-- **Apps that pause reminders** is the same chips-over-a-search-field control as
-  the meeting list, over the same list of every app installed on the Mac. It
-  starts empty and stays that way until you put something in it: which apps
-  should not be interrupted is personal, and there is no sensible list to guess
-  from.
-- **Only the app in front counts.** An app merely being open does nothing —
-  leaving a game running in the background all week would otherwise switch
-  reminders off all week. Nothing is asked of the microphone or the camera, so
-  this adds no permission prompt of any kind.
-- Switching in has to settle for 5 seconds before it counts, so clicking
-  through a window to reach something behind it holds nothing. Leaving has a
-  20-second grace period, so alt-tabbing out to look something up and straight
-  back does not land a popup on the way in.
-- Editing the list is acted on at once rather than waiting out the grace
-  period: taking the app you are in back off the list releases immediately.
-  Look Away's own windows never count as leaving, so opening this panel
-  mid-game does not end the hold. At launch the app already in front counts
-  straight away.
-- **The 20 minutes keeps running**, exactly as it does through a meeting. A
-  break that came due mid-session opens when you leave the app, and a session
-  shorter than the time left just carries on counting. It is one break either
-  way, not a queue of them.
-- While a hold is on the menu bar shows a window icon and the menu reads
-  "In Minecraft — next break in 4:32", or "break when you're done" once it is
-  already due. **Take a Break Now** still works, and pausing from the menu
-  still outranks detection.
+- Only the app in front counts. Leaving it open in the background does nothing.
+- The 20 minutes keep counting. If a break came due, it opens when you leave
+  the app.
 
-Both lists can hold at once — a call taken with a game still up — and the popup
-waits for the last of them to lift. The menu names the meeting while there is
-one, since that is the hold with an end somebody else decides.
+[More on chosen apps](docs/how-it-works.md#chosen-apps)
 
-## Verses
+### Verses
 
-Twenty seconds of looking away is also twenty seconds to think on something.
-Switch on **Show a verse during breaks** and the popup carries a verse under the
-countdown. Opt-in like the rest; left off, the popup is exactly as above.
+Show a Bible verse to meditate on during each break.
 
 <p align="center">
   <picture>
@@ -208,75 +123,34 @@ countdown. Opt-in like the rest; left off, the popup is exactly as above.
   </picture>
 </p>
 
-- **Read, then look away.** Reading keeps your eyes on the screen, which is the
-  opposite of the point, so the break opens with 5 seconds for reading, under
-  "Read, then look away and meditate", before its countdown starts. The
-  reading time is added to the break rather than taken out of it, so all 20
-  seconds of the countdown are still spent looking away. The verse then dims
-  while the countdown runs — still there if you glance back — and returns in
-  full at Done, when the popup stays up 4 seconds instead of the usual moment.
-- **Verse of the day** is built in: 430 short verses from the Berean Standard
-  Bible, one per day and the same one at every break that day. No network is
-  involved. The BSB has been dedicated to the public domain.
-- **My verses** is your own list, in any translation: paste the text, add a
-  reference if you like. Breaks step through it one verse per break, in order,
-  and keep their place across restarts. Only a finished break moves on; a
-  delayed or declined one brings the same verse back. Drag to reorder, or use
-  each row's menu. Past 280 characters the count turns orange, since a long
-  verse is hard to take in at a glance, but it is still saved and shown. An
-  empty list falls back to the verse of the day.
+- The break opens with 5 seconds to read the verse. Then the 20-second
+  countdown starts, so all 20 seconds are still spent looking away.
+- Choose **Verse of the day**, a built-in set of 430 verses from the Berean
+  Standard Bible, or **My verses**, your own list in any translation.
 
-The built-in list lives in `scripts/daily-verse-references.txt`, one reference
-per line in the order the days take them. `make verses` regenerates
-`Sources/LookAwayCore/DailyVerses+All.swift` from the official BSB text, so no
-verse is ever typed by hand. It closes a quotation the cut leaves open, drops a
-stray closing mark, leaves out "Selah", and refuses the list if a reference is
-unknown or repeated or a verse runs past 280 characters.
+[More on verses](docs/how-it-works.md#verses)
 
-## Install
+## Privacy
 
-Look Away needs macOS 14 Sonoma or newer.
+- Look Away never records audio or video, and never asks for microphone or
+  camera permission. Meeting detection only asks macOS whether those devices
+  are in use, and by which app.
+- Your settings stay on your Mac. There's no account and no analytics.
+- The only network requests are the update check against GitHub Releases and
+  the update download itself.
 
-1. Download **LookAway.dmg** from the
-   [latest release](https://github.com/connortorrell/look-away/releases/latest).
-2. Open it and drag **Look Away** onto **Applications**.
-3. Open Look Away from Applications.
+## Updating and uninstalling
 
-Or, with [Homebrew](https://brew.sh):
+Look Away checks for updates at launch and when you open its menu. When a
+new release is out, **Install Update** in the menu turns on and shows the new
+version. Click it and Look Away downloads the update, checks that it's signed
+by the same developer, swaps it in and relaunches, all in a few seconds.
+Homebrew users can also run `brew upgrade --cask look-away`.
 
-```bash
-brew install --cask connortorrell/tap/look-away
-```
+To uninstall, quit Look Away from its menu and drag it from Applications to the
+Trash. macOS removes its login item with it.
 
-The app is signed and notarized by Apple, so it opens without a Gatekeeper
-warning.
-
-When it's running you'll see an eye icon in the menu bar. Click it to see the
-time until the next break, pause reminders, or take a break right away. The
-first popup arrives 20 minutes after launch.
-
-The app adds itself to your login items the first time it runs from
-`Applications`, so it starts automatically after a restart. Turn that off from
-the menu with **Launch at Login** if you'd rather start it by hand.
-
-### Updating
-
-When a new release is out, **Install Update** in the menu lights up with its
-version. Click it and Look Away downloads the release, checks that it is
-signed by the same developer, swaps it into place and relaunches, all in a few
-seconds. It checks when the app starts and whenever you open the menu, at most
-every 15 minutes.
-
-If an update fails, the old version keeps running and the reason is in
-`~/Library/Logs/Look Away/update.log`. Downloading the DMG again always works
-too, and Homebrew users can `brew upgrade --cask look-away`.
-
-### Uninstalling
-
-Quit Look Away from its menu, then drag `Look Away.app` out of `Applications`
-to the Trash. If Launch at Login was on, macOS removes the login item with it.
-
-If you installed with Homebrew, this quits the app and removes it:
+With Homebrew, run:
 
 ```bash
 brew uninstall --cask look-away
@@ -284,10 +158,30 @@ brew uninstall --cask look-away
 
 Add `--zap` to also delete your settings and the update log.
 
-### Building from source
+## FAQ
 
-You need Xcode 16 or newer, installed from the Mac App Store and opened once so
-it can finish setting up its command line tools. Then:
+**A break appeared about 30 seconds after my call ended. Why?**
+Meeting detection waits 30 seconds after a call seems to end, so a moment on
+mute or a gap between back-to-back calls doesn't let a popup through.
+
+**Reminders didn't pause during my call.**
+Check the last line of the Meetings settings. It shows what detection sees
+right now. If the call app isn't in your list, add it. If you only listen,
+with the microphone fully off, turn on **Count audio playing too**, under
+*Also detect listen-only calls*. See
+[listen-only calls](docs/how-it-works.md#listen-only-calls) for the trade-off.
+
+**Can I change the 20 minutes?**
+Not in the app. The durations are set in code, and
+[CONTRIBUTING.md](CONTRIBUTING.md#tunables) lists where each one lives.
+
+**An update failed.**
+The old version keeps running, and the reason is logged in
+`~/Library/Logs/Look Away/update.log`. Downloading the
+[latest DMG](https://github.com/connortorrell/look-away/releases/latest) and
+installing over the top always works.
+
+## Building from source
 
 ```bash
 git clone https://github.com/connortorrell/look-away.git
@@ -295,82 +189,11 @@ cd look-away
 make install
 ```
 
-`make install` compiles the app, wraps it into `Look Away.app`, signs it for
-local use, copies it to `Applications`, and launches it. A build like this
-doesn't update itself, since it isn't signed with the release certificate, so
-the menu has no Install Update item. `git pull && make install` updates it.
+This needs Xcode 16 or newer. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+dev loop, tests and project layout, and [docs/releasing.md](docs/releasing.md)
+for how releases are published.
 
-If you built Look Away from source before releases existed, install the DMG
-once over the top. Your settings carry over, and from then on it updates
-itself.
+## License
 
-| Command        | What it does                                   |
-|----------------|------------------------------------------------|
-| `make test`    | Runs the scheduler unit tests                  |
-| `make run`     | Builds and launches from `./build` (dev loop)  |
-| `make bundle`  | Builds the `.app` without launching            |
-| `make dist`    | Packages a release into `./dist` (see below)   |
-| `make verses`  | Regenerates the verse of the day list from the BSB |
-| `make artwork` | Re-renders the app icon and DMG background from their SVGs |
-| `make clean`   | Removes build output                           |
-
-### Releasing
-
-Push a version tag and GitHub Actions does the rest:
-
-```bash
-git tag v1.2.0
-git push origin v1.2.0
-```
-
-[`release.yml`](.github/workflows/release.yml) runs the tests, builds a
-universal app, signs it with Developer ID, has Apple notarize it, and publishes
-`LookAway.dmg` (for people) and `LookAway.zip` (for the in-app updater) as a
-GitHub release. Then it bumps the cask in
-[connortorrell/homebrew-tap](https://github.com/connortorrell/homebrew-tap).
-The tag is the only place the version lives. A tag with a hyphen, like
-`v1.2.0-rc1`, is published as a prerelease, which the updater and Homebrew
-ignore, so it's a safe way to test the pipeline.
-
-`make dist VERSION=0.0.0 NOTARIZE=0` does the same packaging locally with an
-ad hoc signature, to check the DMG and zip without a certificate.
-
-The workflow needs these repository secrets:
-
-| Secret                      | What it is |
-|-----------------------------|------------|
-| `DEVELOPER_ID_P12_BASE64`   | The Developer ID Application certificate and key, exported from Keychain Access as `.p12`, then `base64 -i cert.p12` |
-| `DEVELOPER_ID_P12_PASSWORD` | The password chosen when exporting it |
-| `NOTARY_KEY_P8_BASE64`      | An App Store Connect API key (Users and Access → Integrations, Developer role), `base64 -i AuthKey_XXXX.p8` |
-| `NOTARY_KEY_ID`             | That key's ID |
-| `NOTARY_ISSUER_ID`          | The issuer ID shown above the keys list |
-| `HOMEBREW_TAP_TOKEN`        | A fine-grained token with Contents: read and write on `connortorrell/homebrew-tap` only |
-
-The tap repo starts as a copy of [`scripts/homebrew-cask.rb`](scripts/homebrew-cask.rb)
-at `Casks/look-away.rb`.
-
-## Layout
-
-- `Sources/LookAwayCore` — pure Foundation: `Config`, the `Timekeeper` clock
-  abstraction, the `Schedule`, `MeetingSettings`, `AppPauseSettings` and
-  `VerseSettings` models and their storage, the built-in `DailyVerses`, the `MeetingMonitor` and `FocusedAppMonitor` detectors
-  on one shared `DebouncedMonitor`, and the `BreakScheduler` state machine.
-  Both detectors report to the same hold on the scheduler, which keeps the
-  popup back until the last one lifts. `UpdateChecker` asks GitHub Releases
-  whether a newer version is out.
-- `Sources/LookAway` — AppKit/SwiftUI shell: menu bar item, floating panel,
-  break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
-  frontmost-app probe and the installed-apps scan, sleep/lock observers,
-  launch-at-login, the `Updater` that downloads, verifies and swaps in a
-  release, and `LogoEye`, the menu bar's resting icon.
-- `Resources/Artwork` — the app icon and DMG background as SVG. `make artwork`
-  renders them into `Resources/AppIcon.icns` and `Resources/dmg-background*.png`,
-  which are committed; it needs `rsvg-convert` (`brew install librsvg`).
-- `scripts` — the verse of the day list and its generator, the release
-  packaging script with its DMG layout, the artwork renderer, and the Homebrew
-  cask template.
-- `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection,
-  app-detection, verse and update-check tests, driven by a fake clock, a fake
-  device probe, a fake frontmost-app probe and a fake GitHub.
-- `.github/workflows/release.yml` — builds, notarizes and publishes a release
-  when a `v*` tag is pushed (see Releasing).
+[MIT](LICENSE). The built-in verses are from the
+[Berean Standard Bible](https://berean.bible), which is in the public domain.
