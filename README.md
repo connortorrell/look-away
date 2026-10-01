@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Resources/Artwork/AppIcon.svg" alt="Look Away app icon: a white eye glancing to the side on a purple rounded square" width="128">
+</p>
+
 # Look Away
 
 A tiny macOS menu bar app for the 20/20/20 rule: every 20 minutes of screen
@@ -23,11 +27,10 @@ time, look at something 20 feet away for 20 seconds.
 - The next 20-minute interval starts when the panel closes (finished or
   declined), never from a snooze.
 - Sleep or screen lock pauses everything; wake or unlock starts a fresh
-- Sleep or screen lock pauses everything; wake or unlock starts a fresh
   20 minutes. Meetings and the apps you name hold the popup too, if you switch
   those on — but the 20 minutes keeps counting (see below).
 - Menu: live "Next break in m:ss", Pause / Resume Reminders, Take a Break Now,
-  Launch at Login, Settings, Quit.
+  Launch at Login, Settings, Install Update, Quit.
 
 Durations live in `Sources/LookAwayCore/Config.swift`.
 
@@ -273,6 +276,14 @@ too, and Homebrew users can `brew upgrade --cask look-away`.
 Quit Look Away from its menu, then drag `Look Away.app` out of `Applications`
 to the Trash. If Launch at Login was on, macOS removes the login item with it.
 
+If you installed with Homebrew, this quits the app and removes it:
+
+```bash
+brew uninstall --cask look-away
+```
+
+Add `--zap` to also delete your settings and the update log.
+
 ### Building from source
 
 You need Xcode 16 or newer, installed from the Mac App Store and opened once so
@@ -345,11 +356,13 @@ at `Casks/look-away.rb`.
   `VerseSettings` models and their storage, the built-in `DailyVerses`, the `MeetingMonitor` and `FocusedAppMonitor` detectors
   on one shared `DebouncedMonitor`, and the `BreakScheduler` state machine.
   Both detectors report to the same hold on the scheduler, which keeps the
-  popup back until the last one lifts.
+  popup back until the last one lifts. `UpdateChecker` asks GitHub Releases
+  whether a newer version is out.
 - `Sources/LookAway` — AppKit/SwiftUI shell: menu bar item, floating panel,
   break view, settings panel, the CoreAudio/CoreMediaIO activity probe, the
   frontmost-app probe and the installed-apps scan, sleep/lock observers,
-  launch-at-login.
+  launch-at-login, the `Updater` that downloads, verifies and swaps in a
+  release, and `LogoEye`, the menu bar's resting icon.
 - `Resources/Artwork` — the app icon and DMG background as SVG. `make artwork`
   renders them into `Resources/AppIcon.icns` and `Resources/dmg-background*.png`,
   which are committed; it needs `rsvg-convert` (`brew install librsvg`).
@@ -357,5 +370,7 @@ at `Casks/look-away.rb`.
   packaging script with its DMG layout, the artwork renderer, and the Homebrew
   cask template.
 - `Tests/LookAwayCoreTests` — scheduler, schedule, meeting-detection,
-  app-detection and verse tests, driven by a fake clock, a fake device probe and a fake
-  frontmost-app probe.
+  app-detection, verse and update-check tests, driven by a fake clock, a fake
+  device probe, a fake frontmost-app probe and a fake GitHub.
+- `.github/workflows/release.yml` — builds, notarizes and publishes a release
+  when a `v*` tag is pushed (see Releasing).
