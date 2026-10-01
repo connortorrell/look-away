@@ -20,11 +20,12 @@ public struct ChosenApp: Codable, Equatable, Hashable, Identifiable, Sendable {
     /// Bundle ID prefixes that belong to this app but are not nested under its
     /// own ID.
     public var extraPrefixes: [String]
-    /// Whether camera use may be pinned on this app while it is running. The
-    /// system reports the camera per device rather than per process, so the
-    /// only way to attribute it is "a chosen app is open". That is fair for a
-    /// dedicated meeting app and wrong for a browser, which is open all day:
-    /// with a browser counting, Photo Booth would read as a meeting. Only
+    /// Whether camera use may be pinned on this app while it is playing audio.
+    /// The system reports the camera per device rather than per process, so
+    /// it is credited only to a chosen app that is itself on an audio device;
+    /// merely being open is not enough. That is fair for a dedicated meeting
+    /// app and wrong for a browser, which is playing something most of the
+    /// day: with a browser counting, Photo Booth would read as a meeting. Only
     /// meeting detection consults this; the pause list never does.
     public var attributesCamera: Bool
 
