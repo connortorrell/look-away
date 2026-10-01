@@ -92,7 +92,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private func refreshItems() {
         statusLine.title = model.statusText
-        statusLine.image = Self.symbol(model.iconName)
+        statusLine.image = Self.stateIcon(model.iconName)
         pauseItem.title = model.isPaused ? "Resume Reminders" : "Pause Reminders"
         pauseItem.image = Self.symbol(model.isPaused ? "play.circle" : "pause.circle")
         breakNowItem.isEnabled = !model.isBreaking
@@ -134,8 +134,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     /// Re-applies the icon whenever `model.iconName` changes.
     private func observeIcon() {
         withObservationTracking {
-            let image = NSImage(systemSymbolName: model.iconName, accessibilityDescription: "Look Away")
+            let image = Self.stateIcon(model.iconName)
             image?.isTemplate = true
+            image?.accessibilityDescription = "Look Away"
             statusItem.button?.image = image
         } onChange: { [weak self] in
             Task { @MainActor in self?.observeIcon() }
@@ -144,6 +145,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
     private static func symbol(_ name: String) -> NSImage? {
         NSImage(systemSymbolName: name, accessibilityDescription: nil)
+    }
+
+    /// The image for `model.iconName`: the logo's eye at rest, an SF Symbol
+    /// for every other state.
+    private static func stateIcon(_ name: String) -> NSImage? {
+        name == AppModel.logoIcon ? LogoEye.image : symbol(name)
     }
 
     // MARK: Actions
