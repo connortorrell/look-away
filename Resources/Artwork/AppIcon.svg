@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- The 824-point body on a 1024 canvas follows Apple's macOS icon grid, so
+       macOS 26 shows it as is instead of shrinking it onto a gray tile. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#534AB7"/>
+  <g transform="translate(100 100) scale(8.24)">
+    <path d="M18 50 Q50 22 82 50 Q50 78 18 50 Z" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linejoin="round"/>
+    <circle cx="63" cy="50" r="9" fill="#FFFFFF"/>
+  </g>
+</svg>

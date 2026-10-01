@@ -18,7 +18,7 @@ NOTARIZE      := 1
 QUIT_APP := pkill -x LookAway; \
 	for _ in $$(seq 50); do pgrep -x LookAway >/dev/null || break; sleep 0.1; done
 
-.PHONY: build bundle run install dist test verses clean
+.PHONY: build bundle run install dist test verses artwork clean
 
 build:
 	swift build -c release $(ARCH_FLAGS)
@@ -29,11 +29,15 @@ test:
 verses:
 	swift scripts/generate-daily-verses.swift
 
+artwork:
+	scripts/generate-artwork.sh
+
 bundle: build
 	rm -rf "$(BUNDLE)"
 	mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	cp "$(BINARY)" "$(CONTENTS)/MacOS/LookAway"
 	cp Resources/Info.plist "$(CONTENTS)/Info.plist"
+	cp Resources/AppIcon.icns "$(CONTENTS)/Resources/AppIcon.icns"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	$(if $(VERSION),plutil -replace CFBundleShortVersionString -string "$(VERSION)" "$(CONTENTS)/Info.plist")
 	$(if $(BUILD_NUMBER),plutil -replace CFBundleVersion -string "$(BUILD_NUMBER)" "$(CONTENTS)/Info.plist")
