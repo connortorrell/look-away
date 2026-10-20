@@ -2,8 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Hosts the settings panel in a plain, single-instance window. The app has no
-/// Dock icon or main menu, so opening it has to bring the app forward and the
-/// window has to handle its own close shortcuts.
+/// Dock icon, so opening it has to bring the app forward.
 @MainActor
 final class SettingsWindowController {
     private static let frameName = "Settings"
@@ -129,7 +128,7 @@ final class ClickFocusGuard {
     var regions: [String: CGRect] = [:]
 }
 
-/// With no main menu there is no File > Close, so Esc and ⌘W are handled here.
+/// Escape is handled here; ⌘W comes from the main menu's Close item.
 private final class SettingsWindow: NSWindow {
     /// Leaves nothing focused, and reports whether anything actually gave the
     /// keyboard up.
@@ -156,14 +155,5 @@ private final class SettingsWindow: NSWindow {
     /// nothing focused, it closes the panel the way Escape usually does.
     override func cancelOperation(_ sender: Any?) {
         if !endEditing() { close() }
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if modifiers == .command, event.charactersIgnoringModifiers == "w" {
-            close()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
     }
 }

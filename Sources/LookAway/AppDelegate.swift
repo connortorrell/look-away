@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var systemEvents: SystemEvents?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        MainMenu.install()
         statusMenu = StatusMenuController(model: model)
         systemEvents = SystemEvents(
             onSuspend: { [model] in model.systemDidSuspend() },
